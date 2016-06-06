@@ -100,6 +100,7 @@ class QuadNode():
         self.is_internal = True
         
         length = len(data_tuples)
+        # TODO: fix max recursion bug due to identical locations
         if length > 1:
             nw_list = []
             ne_list = []
@@ -187,7 +188,9 @@ class QuadNode():
         if self.is_internal:
             distance = sqrt((self.center_of_gravity_x - x) ** 2 +
                             (self.center_of_gravity_y - y) ** 2)
-            if self.width / distance <= THETA:
+            if distance == 0:
+                return True
+            elif self.width / distance <= THETA:
                 return True
             else:
                 return False
@@ -360,6 +363,26 @@ def run():
         velocity = uniform(0,200)
         vx = cos(vel_angle) * velocity + vx0
         vy = sin(vel_angle) * velocity + vy0
+        astronomical_objects.append(AstronomicalObject(world, sprite,
+                                                       mass, x, y, vx, vy))
+
+    # Instantiate some random asteroids.
+    # Pretty messy. Should clean up a bit.
+    for i in xrange(0):
+        sprite = factory.from_color(GRAY, size=(4, 4))
+        mass = randint(1, 10000000) # Apparently, they're light. ;)
+        # Put them on the same orbit as Jupiter.
+        x0, y0 = 0, 0
+        # Add noise to location.
+        radius = randint(0, 100000000000)
+        pos_angle = vonmisesvariate(0,0)
+        x = int(cos(pos_angle) * radius + x0)
+        y = int(sin(pos_angle) * radius + y0)
+        # Add significant noise to velocity.
+        vel_angle = vonmisesvariate(0,0)
+        velocity = uniform(0,2000)
+        vx = cos(vel_angle) * velocity
+        vy = sin(vel_angle) * velocity
         astronomical_objects.append(AstronomicalObject(world, sprite,
                                                        mass, x, y, vx, vy))
         
