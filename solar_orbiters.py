@@ -2,6 +2,9 @@
 
 A numerical simulation of the Solar system up to Jupiter.
 Also, some random Trojans... or were they Greeks?
+
+Requires pysdl2 installed, and SDL2.dll in "c:\\Python27\\DLLs". May require
+fiddling.
 """
 
 import sys
@@ -25,9 +28,9 @@ GRAY   = sdl2.ext.Color(150, 150, 150)
 
 GRAV_CONSTANT = 6.67408 * 10 ** (-11) # For meters!
 
-TIME_STEP = 3600 # The computation step in seconds
-TIME_SCALE = 20 # Computational steps per frame (supposedly 10 ms per frame).
-THETA = 1.0 # Distance threshold ratio. Large values increase speed but
+SECONDS_PER_STEP = 3600 # The computation step in seconds
+STEPS_PER_FRAME = 5 # Computational steps per frame (supposedly 10 ms per frame).
+THETA = 10.0 # Distance threshold ratio. Large values increase speed but
             # sacrifice accuracy.
 
 
@@ -57,13 +60,13 @@ class MovementSystem(sdl2.ext.Applicator):
     def process(self, world, componentsets):
         """Apply Barnes-Hut gravity algorithm (O(n log n))"""
         # Squeeze some efficiency with local variables
-        time_step = TIME_STEP
+        time_step = SECONDS_PER_STEP
         grav_constant = GRAV_CONSTANT
         # Super clunky, but componentsets is apparently an iterator, not a list!
         comps = []
         for comptuple in componentsets:
             comps.append(comptuple)
-        for i in xrange(TIME_SCALE):
+        for i in xrange(STEPS_PER_FRAME):
             grav_data_tuples = [(mass.mass, position.x, position.y) for
                         mass, position, velocity, acceleration in
                         comps]
@@ -278,70 +281,10 @@ class AstronomicalObject(sdl2.ext.Entity):
         self.acceleration = Acceleration()
         self.mass = Mass()
         self.mass.mass = mass
-
-def apply_gravity(gravitational_objects):
-    # Squeeze some efficiency with local variables
-    time_step = TIME_STEP
-    grav_constant = GRAV_CONSTANT
-
-    for i in xrange(TIME_SCALE):
-        for o1 in gravitational_objects:
-            position = o1.position
-            velocity = o1.velocity
-            acceleration = o1.acceleration
-            sprite = o1.sprite
-            
-            # Compute gravitational acceleration for step
-            # Squeeze a little more efficiency with local vars
-            ax = acceleration.ax
-            ay = acceleration.ay
-            ax0 = ax + 0
-            ay0 = ay + 0
-            ax, ay = 0, 0
-            x1, y1 = position.x, position.y
-            for o2 in gravitational_objects:
-                x2, y2 = o2.position.x, o2.position.y
-                if x1 == x2 and y1 == y2 or o2.mass.mass < 100000:
-                    # Get rid of all those nasty div by zero errors
-                    # and disregard objects below 100 000 kg
-                    continue
-                # Gravitational acceleration generated at this location
-                # by given object, as per Newton's gravitational equation,
-                # but divided on both sides by the mass of the affected
-                # object. (Eigenvalue)
-                a = grav_constant * o2.mass.mass / ((x2 - x1)**2 +
-                                                  (y2 - y1)**2)
-                # Direction of the acceleration vector
-                direction = atan2(y2 - y1, x2 - x1)
-                # X and y components of the gravity vector
-                ax += a * cos(direction)
-                ay += a * sin(direction)
-
-            if ax0 == 0 and ay0 == 0:
-                velocity.vx += ax * time_step
-                velocity.vy += ay * time_step
-                
-                position.x += velocity.vx * time_step
-                position.y += velocity.vy * time_step
-            else:
-                velocity.vx += ax0 * time_step / 2
-                velocity.vy += ay0 * time_step / 2
-                
-                position.x += velocity.vx * time_step
-                position.y += velocity.vy * time_step
-
-                velocity.vx += ax * time_step / 2
-                velocity.vy += ay * time_step / 2
-
-            swidth, sheight = sprite.size
-            sprite.x, sprite.y = world_coord_to_screen_coord(
-                position.x, position.y, camera)
-            sprite.x -= swidth
-            sprite.y -= sheight
             
 
 def run():
-    global camera, TIME_SCALE
+    global camera, STEPS_PER_FRAME
 
     astronomical_objects = []
     
@@ -441,11 +384,11 @@ def run():
                 elif event.key.keysym.sym == sdl2.SDLK_z:
                     camera.zoom(0.9)
                 elif event.key.keysym.sym == sdl2.SDLK_PERIOD:
-                    TIME_SCALE += 1
+                    STEPS_PER_FRAME += 1
                 elif event.key.keysym.sym == sdl2.SDLK_COMMA:
-                    TIME_SCALE = max(1, TIME_SCALE-1)
+                    STEPS_PER_FRAME = max(1, STEPS_PER_FRAME-1)
         sdl2.SDL_Delay(10)
-        apply_gravity(astronomical_objects)
+        
         world.process()
 
 
