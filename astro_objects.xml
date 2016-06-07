@@ -108,4 +108,58 @@
 			<b>50</b>
 		</color>
     </object>
+	<object name="Saturn">
+        <mass>5.6851
+			<exponent>26</exponent>
+		</mass>
+		<position>
+			<x>1426725400</x>
+			<y>0</y>
+		</position>
+		<velocity>
+			<x>0</x>
+			<y>9.6724</y>
+		</velocity>
+		<color>
+			<r>245</r>
+			<g>245</g>
+			<b>220</b>
+		</color>
+    </object>
+	<object name="Uranus">
+        <mass>8.6849
+			<exponent>25</exponent>
+		</mass>
+		<position>
+			<x>2870972200</x>
+			<y>0</y>
+		</position>
+		<velocity>
+			<x>0</x>
+			<y>6.8352</y>
+		</velocity>
+		<color>
+			<r>220</r>
+			<g>220</g>
+			<b>255</b>
+		</color>
+    </object>
+	<object name="Neptune">
+        <mass>1.0244
+			<exponent>26</exponent>
+		</mass>
+		<position>
+			<x>4498252900</x>
+			<y>0</y>
+		</position>
+		<velocity>
+			<x>0</x>
+			<y>5.4778</y>
+		</velocity>
+		<color>
+			<r>0</r>
+			<g>0</g>
+			<b>220</b>
+		</color>
+    </object>
 </data>

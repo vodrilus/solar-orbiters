@@ -18,7 +18,7 @@ import xml.etree.ElementTree as ET
 
 ASTRO_OBJECTS_XML_PATH = 'astro_objects.xml'
 WINDOW_SIZE = 800, 600
-WINDOW_SCALE = 150000000000 // 50 # 150 exp 9 m = about 1 AU = 50 pixels
+WINDOW_SCALE = 150e9 // 50 # 150 exp 9 m = about 1 AU = 50 pixels
 
 BLACK  = sdl2.ext.Color(0, 0, 0)
 WHITE  = sdl2.ext.Color(255, 255, 255)
@@ -26,12 +26,17 @@ BLUE   = sdl2.ext.Color(0, 0, 255)
 YELLOW = sdl2.ext.Color(255, 255, 0)
 GRAY   = sdl2.ext.Color(150, 150, 150)
 
-GRAV_CONSTANT = 6.67408 * 10 ** (-11) # For meters!
+GRAV_CONSTANT = 6.67408e-11 # For meters!
 
 SECONDS_PER_STEP = 3600 # The computation step in seconds
-STEPS_PER_FRAME = 5 # Computational steps per frame (supposedly 10 ms per frame).
-THETA = 10.0 # Distance threshold ratio. Large values increase speed but
+STEPS_PER_FRAME = 0 # Computational steps per frame (supposedly 10 ms per frame).
+THETA = 0.5 # Distance threshold ratio. Large values increase speed but
             # sacrifice accuracy.
+MAX_QUADTREE_DEPTH = 50
+
+TROJANS = 100
+FREE_ASTEROIDS = 100
+JUPITER_ORBITERS = 100
 
 
 
@@ -48,14 +53,15 @@ class SpriteMovementSystem(sdl2.ext.Applicator):
             sprite.x, sprite.y = world_coord_to_screen_coord(position.x,
                                                    position.y,
                                                    camera)
-            sprite.x -= swidth
-            sprite.y -= sheight
+            sprite.x -= swidth // 2
+            sprite.y -= sheight // 2
         
 
 class MovementSystem(sdl2.ext.Applicator):
     def __init__(self):
         super(MovementSystem, self).__init__()
         self.componenttypes = (Mass, Position, Velocity, Acceleration)
+        self.is_gravity_initialized = False
 
     def process(self, world, componentsets):
         """Apply Barnes-Hut gravity algorithm (O(n log n))"""
@@ -63,45 +69,60 @@ class MovementSystem(sdl2.ext.Applicator):
         time_step = SECONDS_PER_STEP
         grav_constant = GRAV_CONSTANT
         # Super clunky, but componentsets is apparently an iterator, not a list!
-        comps = []
-        for comptuple in componentsets:
-            comps.append(comptuple)
+        comps = list(componentsets)
+        
         for i in xrange(STEPS_PER_FRAME):
             grav_data_tuples = [(mass.mass, position.x, position.y) for
-                        mass, position, velocity, acceleration in
-                        comps]
+                                mass, position, velocity, acceleration in
+                                comps]
 
-            root_node = QuadNode(grav_data_tuples, 10**12, 0, 0)
+            root_node = QuadNode(grav_data_tuples, 10e13, 0, 0, is_root=True)
             
             for mass, position, velocity, acceleration in comps:
-                
                 # Compute gravitational acceleration for step
-                # Squeeze a little more efficiency with local vars
-                
-                ax, ay = 0, 0
-                x1, y1 = position.x, position.y
-                ax, ay = root_node.get_gravity_at_point(x1, y1)
+                ax, ay = root_node.get_gravity_at_point(position.x, position.y)
+                acceleration.ax = ax
+                acceleration.ay = ay
                 
                 velocity.vx += ax * time_step
                 velocity.vy += ay * time_step
-                
+
                 position.x += velocity.vx * time_step
                 position.y += velocity.vy * time_step
-
                 
 
 class QuadNode():
-    def __init__(self, data_tuples, width, x, y):
+    def __init__(self, data_tuples, width, x, y, is_root=False, depth=0):
         # data_tuples = [(mass, x, y)...]
         self.width = width
         self.mass = 0
         self.center_of_gravity_x = 0
         self.center_of_gravity_y = 0
         self.is_internal = True
+        self.is_root = is_root
+        self.children = []
+        self.depth = depth
+
+        if self.is_root:
+            x_by_mass = 0
+            y_by_mass = 0
+            total_mass = 0
+            
+            for o in data_tuples:
+                object_mass = o[0]
+                total_mass += object_mass
+                object_x = o[1]
+                object_y = o[2]
+                x_by_mass += object_x * object_mass
+                y_by_mass += object_y * object_mass
+
+            self.x = x_by_mass / total_mass
+            self.y = y_by_mass / total_mass
+            
         
         length = len(data_tuples)
         # TODO: fix max recursion bug due to identical locations
-        if length > 1:
+        if length > 1 and self.depth < MAX_QUADTREE_DEPTH:
             nw_list = []
             ne_list = []
             sw_list = []
@@ -131,13 +152,41 @@ class QuadNode():
             self.center_of_gravity_y = y_by_mass / self.mass
             
             halfwidth = width/2
-            self.nw = QuadNode(nw_list, halfwidth, x - halfwidth, y - halfwidth)
-            self.ne = QuadNode(ne_list, halfwidth, x + halfwidth, y - halfwidth)
-            self.sw = QuadNode(sw_list, halfwidth, x - halfwidth, y + halfwidth)
-            self.se = QuadNode(se_list, halfwidth, x + halfwidth, y + halfwidth)
-            # Is it really necessary to define the direction of the node? No?
-
+            if nw_list:
+                self.children.append(QuadNode(nw_list, halfwidth,
+                                              x - halfwidth, y - halfwidth,
+                                              depth=self.depth+1))
+            if ne_list:
+                self.children.append(QuadNode(ne_list, halfwidth,
+                                              x + halfwidth, y - halfwidth,
+                                              depth=self.depth+1))
+            if sw_list:
+                self.children.append(QuadNode(sw_list, halfwidth,
+                                              x - halfwidth, y + halfwidth,
+                                              depth=self.depth+1))
+            if se_list:
+                self.children.append(QuadNode(se_list, halfwidth,
+                                              x + halfwidth, y + halfwidth,
+                                              depth=self.depth+1))
                 
+        elif length > 1 and self.depth == MAX_QUADTREE_DEPTH:
+            x_by_mass = 0
+            y_by_mass = 0
+            
+            for o in data_tuples:
+                object_mass = o[0]
+                self.mass += object_mass
+                object_x = o[1]
+                object_y = o[2]
+                x_by_mass += object_x * object_mass
+                y_by_mass += object_y * object_mass
+                self.children.append(QuadNode([o,], width,
+                                              x, y,
+                                              depth=self.depth+1))
+
+            self.center_of_gravity_x = x_by_mass / self.mass
+            self.center_of_gravity_y = y_by_mass / self.mass
+            
         elif length == 1:
             self.is_internal = False
             astro_object = data_tuples[0]
@@ -145,7 +194,7 @@ class QuadNode():
             self.center_of_gravity_x = astro_object[1]
             self.center_of_gravity_y = astro_object[2]
             
-        else:
+        else: # Should never happen
             self.is_internal = False
             self.center_of_gravity = 0, 0
             
@@ -174,10 +223,8 @@ class QuadNode():
             ay = a * sin(direction)
             return ax, ay
         else:
-            child_nodes = [self.nw, self.ne, self.sw, self.se]
-            child_gravities = [n.get_gravity_at_point(x,y) for n in child_nodes]
             ax, ay = 0, 0
-            for n in child_nodes:
+            for n in self.children:
                 child_ax, child_ay = n.get_gravity_at_point(x,y)
                 ax += child_ax
                 ay += child_ay
@@ -188,8 +235,8 @@ class QuadNode():
         if self.is_internal:
             distance = sqrt((self.center_of_gravity_x - x) ** 2 +
                             (self.center_of_gravity_y - y) ** 2)
-            if distance == 0:
-                return True
+            if distance == 0: # Avert div by zero
+                return False
             elif self.width / distance <= THETA:
                 return True
             else:
@@ -226,7 +273,7 @@ class Camera():
     def __init__(self):
         self.x = 0
         self.y = 0
-        self.scale = WINDOW_SCALE + 0 # Copy, not reference!
+        self.scale = WINDOW_SCALE
 
     def move(self, dx, dy):
         self.x += dx
@@ -342,7 +389,7 @@ def run():
 
     # Instantiate some Trojans... or were they Greeks?
     # Pretty messy. Should clean up a bit.
-    for i in xrange(0):
+    for i in xrange(TROJANS):
         sprite = factory.from_color(GRAY, size=(4, 4))
         mass = randint(1, 10000000) # Apparently, they're light. ;)
         # Put them on the same orbit as Jupiter.
@@ -366,21 +413,43 @@ def run():
         astronomical_objects.append(AstronomicalObject(world, sprite,
                                                        mass, x, y, vx, vy))
 
+    # Instantiate some Jupiter Orbiters
+    # Pretty messy. Should clean up a bit.
+    for i in xrange(JUPITER_ORBITERS):
+        sprite = factory.from_color(GRAY, size=(4, 4))
+        mass = randint(1, 10000000) # Apparently, they're light. ;)
+        # Put them on the same orbit as Jupiter.
+        x0, y0 = 778412010000, 0
+        # Add noise to location.
+        radius = randint(1e3, 1e11)
+        pos_angle = vonmisesvariate(0,0)
+        x = int(cos(pos_angle) * radius + x0)
+        y = int(sin(pos_angle) * radius + y0)
+        # Start with orbital speed identical to that of Jupiter's.
+        vx0, vy0 = 0, 13.0697 * 1000
+        # Add significant noise to velocity.
+        vel_angle = vonmisesvariate(0,0)
+        velocity = uniform(0,200)
+        vx = cos(vel_angle) * velocity + vx0
+        vy = sin(vel_angle) * velocity + vy0
+        astronomical_objects.append(AstronomicalObject(world, sprite,
+                                                       mass, x, y, vx, vy))
+
     # Instantiate some random asteroids.
     # Pretty messy. Should clean up a bit.
-    for i in xrange(0):
+    for i in xrange(FREE_ASTEROIDS):
         sprite = factory.from_color(GRAY, size=(4, 4))
         mass = randint(1, 10000000) # Apparently, they're light. ;)
         # Put them on the same orbit as Jupiter.
         x0, y0 = 0, 0
         # Add noise to location.
-        radius = randint(0, 100000000000)
+        radius = randint(1e5, 1e12)
         pos_angle = vonmisesvariate(0,0)
         x = int(cos(pos_angle) * radius + x0)
         y = int(sin(pos_angle) * radius + y0)
         # Add significant noise to velocity.
         vel_angle = vonmisesvariate(0,0)
-        velocity = uniform(0,2000)
+        velocity = uniform(0,1e5)
         vx = cos(vel_angle) * velocity
         vy = sin(vel_angle) * velocity
         astronomical_objects.append(AstronomicalObject(world, sprite,
@@ -409,7 +478,8 @@ def run():
                 elif event.key.keysym.sym == sdl2.SDLK_PERIOD:
                     STEPS_PER_FRAME += 1
                 elif event.key.keysym.sym == sdl2.SDLK_COMMA:
-                    STEPS_PER_FRAME = max(1, STEPS_PER_FRAME-1)
+                    STEPS_PER_FRAME = max(0, STEPS_PER_FRAME-1)
+                    
         sdl2.SDL_Delay(10)
         
         world.process()
