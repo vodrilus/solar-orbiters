@@ -1,7 +1,7 @@
 """Solar orbiters
 
-A numerical simulation of the Solar system up to Jupiter.
-Also, some random Trojans... or were they Greeks?
+A numerical simulation of the planets of the Solar system.
+Also, some asteroids.
 
 Requires pysdl2 installed, and SDL2.dll in "c:\\Python27\\DLLs". May require
 fiddling.
@@ -39,8 +39,7 @@ FREE_ASTEROIDS = 100
 JUPITER_ORBITERS = 100
 
 
-
-
+"""Makes sprites represent the positions of astronomical objects."""
 class SpriteMovementSystem(sdl2.ext.Applicator):
     def __init__(self):
         super(SpriteMovementSystem, self).__init__()
@@ -57,6 +56,7 @@ class SpriteMovementSystem(sdl2.ext.Applicator):
             sprite.y -= sheight // 2
         
 
+"""Applies gravity and manages movement of astronomical objeccts."""
 class MovementSystem(sdl2.ext.Applicator):
     def __init__(self):
         super(MovementSystem, self).__init__()
@@ -91,6 +91,7 @@ class MovementSystem(sdl2.ext.Applicator):
                 position.y += velocity.vy * time_step
                 
 
+"""A basic data structure tailored for the Barnes-Hut algorithm."""
 class QuadNode():
     def __init__(self, data_tuples, width, x, y, is_root=False, depth=0):
         # data_tuples = [(mass, x, y)...]
@@ -119,9 +120,8 @@ class QuadNode():
             self.x = x_by_mass / total_mass
             self.y = y_by_mass / total_mass
             
-        
         length = len(data_tuples)
-        # TODO: fix max recursion bug due to identical locations
+        
         if length > 1 and self.depth < MAX_QUADTREE_DEPTH:
             nw_list = []
             ne_list = []
@@ -170,6 +170,7 @@ class QuadNode():
                                               depth=self.depth+1))
                 
         elif length > 1 and self.depth == MAX_QUADTREE_DEPTH:
+            # Most likely at least two objects are superimposed.
             x_by_mass = 0
             y_by_mass = 0
             
@@ -198,7 +199,7 @@ class QuadNode():
             self.is_internal = False
             self.center_of_gravity = 0, 0
             
-
+    """Calculate the gravity exerted by this node at given point."""
     def get_gravity_at_point(self, x, y):
         if self.mass == 0:
             return 0.0, 0.0
@@ -230,7 +231,7 @@ class QuadNode():
                 ay += child_ay
             return ax, ay
 
-
+    """Determine if the current node is accurate enough for the given point."""
     def is_accurate_enough(self, x, y):
         if self.is_internal:
             distance = sqrt((self.center_of_gravity_x - x) ** 2 +
@@ -244,7 +245,7 @@ class QuadNode():
         else:
             return True
 
-# The main renderer
+"""The main renderer"""
 class SoftwareRenderSystem(sdl2.ext.SoftwareSpriteRenderSystem):
     def __init__(self, window):
         super(SoftwareRenderSystem, self).__init__(window)
@@ -254,7 +255,7 @@ class SoftwareRenderSystem(sdl2.ext.SoftwareSpriteRenderSystem):
         super(SoftwareRenderSystem, self).render(components)
 
 
-# Just in case the Software Renderer is unavailable for some reason.
+"""Redundant renderer"""
 class TextureRenderSystem(sdl2.ext.TextureSpriteRenderSystem):
     def __init__(self, renderer):
         super(TextureRenderSystem, self).__init__(renderer)
@@ -268,6 +269,7 @@ class TextureRenderSystem(sdl2.ext.TextureSpriteRenderSystem):
         super(TextureRenderSystem, self).render(components)
 
 
+"""A simple class to transform world co-ordinates to screen co-ordinates."""
 class Camera():
     """Allows movement of display."""
     def __init__(self):
@@ -315,6 +317,7 @@ class Acceleration(object):
         self.ay = 0
         
 
+"""Model of an astronomical object (eg. star, planet, moon, asteroid)."""
 class AstronomicalObject(sdl2.ext.Entity):
     def __init__(self, world, sprite, mass=0, posx=0, posy=0, vx=0, vy=0):
         self.sprite = sprite
@@ -429,7 +432,7 @@ def run():
         vx0, vy0 = 0, 13.0697 * 1000
         # Add significant noise to velocity.
         vel_angle = vonmisesvariate(0,0)
-        velocity = uniform(0,200)
+        velocity = uniform(0,1e3)
         vx = cos(vel_angle) * velocity + vx0
         vy = sin(vel_angle) * velocity + vy0
         astronomical_objects.append(AstronomicalObject(world, sprite,
@@ -454,8 +457,7 @@ def run():
         vy = sin(vel_angle) * velocity
         astronomical_objects.append(AstronomicalObject(world, sprite,
                                                        mass, x, y, vx, vy))
-        
-
+    
     running = True
     while running:
         for event in sdl2.ext.get_events():
