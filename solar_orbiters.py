@@ -30,13 +30,13 @@ GRAV_CONSTANT = 6.67408e-11 # For meters!
 
 SECONDS_PER_STEP = 3600 # The computation step in seconds
 STEPS_PER_FRAME = 0 # Computational steps per frame (supposedly 10 ms per frame).
-THETA = 0.5 # Distance threshold ratio. Large values increase speed but
+THETA = 0.7 # Distance threshold ratio. Large values increase speed but
             # sacrifice accuracy.
-MAX_QUADTREE_DEPTH = 50
+MAX_QUADTREE_DEPTH = 30
 
-TROJANS = 100
-FREE_ASTEROIDS = 100
-JUPITER_ORBITERS = 100
+TROJANS = 20
+FREE_ASTEROIDS = 20
+JUPITER_ORBITERS = 20
 
 
 """Makes sprites represent the positions of astronomical objects."""
@@ -46,12 +46,12 @@ class SpriteMovementSystem(sdl2.ext.Applicator):
         self.componenttypes = Position, sdl2.ext.Sprite
 
     def process(self, world, componentsets):
+        local_camera = camera
         """Move sprites to represent planet movement"""
         for position, sprite in componentsets:
             swidth, sheight = sprite.size
-            sprite.x, sprite.y = world_coord_to_screen_coord(position.x,
-                                                   position.y,
-                                                   camera)
+            sprite.x, sprite.y = local_camera.world_coord_to_screen_coord(
+                position.x, position.y)
             sprite.x -= swidth // 2
             sprite.y -= sheight // 2
         
@@ -278,18 +278,17 @@ class Camera():
         self.scale = WINDOW_SCALE
 
     def move(self, dx, dy):
-        self.x += dx
-        self.y += dy
+        self.x += dx * self.scale
+        self.y += dy * self.scale
 
     def zoom(self, factor):
         self.scale = int(self.scale / factor)
 
-
-def world_coord_to_screen_coord(x_world,y_world,camera):
-    w_width, w_height = WINDOW_SIZE
-    x_screen = int(w_width / 2 + x_world / camera.scale) - camera.x
-    y_screen = int(w_height / 2+ y_world / camera.scale) - camera.y
-    return x_screen, y_screen
+    def world_coord_to_screen_coord(self, x_world, y_world):
+        w_width, w_height = WINDOW_SIZE
+        x_screen = int((x_world - self.x) / self.scale + w_width / 2 )
+        y_screen = int((y_world - self.y) / self.scale + w_height / 2 )
+        return x_screen, y_screen
 
 
 # Define data bags
@@ -321,7 +320,7 @@ class Acceleration(object):
 class AstronomicalObject(sdl2.ext.Entity):
     def __init__(self, world, sprite, mass=0, posx=0, posy=0, vx=0, vy=0):
         self.sprite = sprite
-        self.sprite.position = world_coord_to_screen_coord(posx,posy,camera)
+        self.sprite.position = camera.world_coord_to_screen_coord(posx,posy)
 
         self.position = Position()
         self.position.x = posx
