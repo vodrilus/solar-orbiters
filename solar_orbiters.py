@@ -39,15 +39,16 @@ FREE_ASTEROIDS = 20
 JUPITER_ORBITERS = 20
 
 
-"""Makes sprites represent the positions of astronomical objects."""
+
 class SpriteMovementSystem(sdl2.ext.Applicator):
+    """Makes sprites represent the positions of astronomical objects."""
     def __init__(self):
         super(SpriteMovementSystem, self).__init__()
         self.componenttypes = Position, sdl2.ext.Sprite
 
     def process(self, world, componentsets):
-        local_camera = camera
         """Move sprites to represent planet movement"""
+        local_camera = camera # Minor hack to minimize global variable access.
         for position, sprite in componentsets:
             swidth, sheight = sprite.size
             sprite.x, sprite.y = local_camera.world_coord_to_screen_coord(
@@ -56,8 +57,9 @@ class SpriteMovementSystem(sdl2.ext.Applicator):
             sprite.y -= sheight // 2
         
 
-"""Applies gravity and manages movement of astronomical objeccts."""
+
 class MovementSystem(sdl2.ext.Applicator):
+    """Applies gravity and manages movement of astronomical objects."""
     def __init__(self):
         super(MovementSystem, self).__init__()
         self.componenttypes = (Mass, Position, Velocity, Acceleration)
@@ -91,8 +93,8 @@ class MovementSystem(sdl2.ext.Applicator):
                 position.y += velocity.vy * time_step
                 
 
-"""A basic data structure tailored for the Barnes-Hut algorithm."""
 class QuadNode():
+    """A basic data structure tailored for the Barnes-Hut algorithm."""
     def __init__(self, data_tuples, width, x, y, is_root=False, depth=0):
         # data_tuples = [(mass, x, y)...]
         self.width = width
@@ -199,8 +201,8 @@ class QuadNode():
             self.is_internal = False
             self.center_of_gravity = 0, 0
             
-    """Calculate the gravity exerted by this node at given point."""
     def get_gravity_at_point(self, x, y):
+        """Calculate the gravity exerted by this node at given point."""
         if self.mass == 0:
             return 0.0, 0.0
         elif self.is_accurate_enough(x, y):
@@ -231,8 +233,9 @@ class QuadNode():
                 ay += child_ay
             return ax, ay
 
-    """Determine if the current node is accurate enough for the given point."""
     def is_accurate_enough(self, x, y):
+        """Determine if the current node is accurate enough for the given
+        point."""
         if self.is_internal:
             distance = sqrt((self.center_of_gravity_x - x) ** 2 +
                             (self.center_of_gravity_y - y) ** 2)
@@ -245,8 +248,9 @@ class QuadNode():
         else:
             return True
 
-"""The main renderer"""
+
 class SoftwareRenderSystem(sdl2.ext.SoftwareSpriteRenderSystem):
+    """The default renderer."""
     def __init__(self, window):
         super(SoftwareRenderSystem, self).__init__(window)
 
@@ -255,8 +259,8 @@ class SoftwareRenderSystem(sdl2.ext.SoftwareSpriteRenderSystem):
         super(SoftwareRenderSystem, self).render(components)
 
 
-"""Redundant renderer"""
 class TextureRenderSystem(sdl2.ext.TextureSpriteRenderSystem):
+    """Hardware-accelerated renderer. Not default."""
     def __init__(self, renderer):
         super(TextureRenderSystem, self).__init__(renderer)
         self.renderer = renderer
@@ -269,9 +273,9 @@ class TextureRenderSystem(sdl2.ext.TextureSpriteRenderSystem):
         super(TextureRenderSystem, self).render(components)
 
 
-"""A simple class to transform world co-ordinates to screen co-ordinates."""
 class Camera():
-    """Allows movement of display."""
+    """A simple class to transform world co-ordinates to screen co-ordinates.
+    Allows movement of display."""
     def __init__(self):
         self.x = 0
         self.y = 0
@@ -316,8 +320,8 @@ class Acceleration(object):
         self.ay = 0
         
 
-"""Model of an astronomical object (eg. star, planet, moon, asteroid)."""
 class AstronomicalObject(sdl2.ext.Entity):
+    """Model of an astronomical object (eg. star, planet, moon, asteroid)."""
     def __init__(self, world, sprite, mass=0, posx=0, posy=0, vx=0, vy=0):
         self.sprite = sprite
         self.sprite.position = camera.world_coord_to_screen_coord(posx,posy)
@@ -389,6 +393,7 @@ def run():
         astronomical_objects.append(AstronomicalObject(world, sprite,
                                                        mass, x, y, vx, vy))
 
+    # TODO: Refactor asteroid creation to function.
     # Instantiate some Trojans... or were they Greeks?
     # Pretty messy. Should clean up a bit.
     for i in xrange(TROJANS):
