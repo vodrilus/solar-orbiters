@@ -30,7 +30,8 @@ GRAY   = sdl2.ext.Color(150, 150, 150)
 GRAV_CONSTANT = 6.67408e-11 # For meters!
 
 SECONDS_PER_STEP = 3600 # The computation step in seconds
-STEPS_PER_FRAME = 0 # Computational steps per frame (supposedly 10 ms per frame).
+STEPS_PER_FRAME = 0 # Computational steps per frame (supposedly 10 ms per
+                    # frame). Can be adjusted with keyboard.
 THETA = 0.7 # Distance threshold ratio. Large values increase speed but
             # sacrifice accuracy.
 MAX_QUADTREE_DEPTH = 30
