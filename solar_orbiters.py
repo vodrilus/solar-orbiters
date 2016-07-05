@@ -1,10 +1,11 @@
+#!/usr/bin/env python3
 """Solar orbiters
 
 A numerical simulation of the planets of the Solar system.
 Also, some asteroids.
 
-Requires pysdl2 installed. May require fiddling. (Windows: E.g. correct SDL2.dll
-in the System32 directory.)
+Requires Python 3 and pysdl2 installed. May require fiddling. (Windows: E.g.
+correct SDL2.dll in the System32 directory.)
 """
 
 import sys
