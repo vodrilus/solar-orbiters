@@ -6,6 +6,11 @@ Also, some asteroids.
 
 Requires Python 3 and pysdl2 installed. May require fiddling. (Windows: E.g.
 correct SDL2.dll in the System32 directory.)
+
+DEBUG: Weird loss of gravity and disappearance of Jupiter (singularity?)
+
+TODO: Extend to 3d.
+    TODO: Extend Camera to 3d.
 """
 
 import sys
@@ -32,13 +37,17 @@ GRAV_CONSTANT = 6.67408e-11 # For meters!
 SECONDS_PER_STEP = 3600 # The computation step in seconds
 STEPS_PER_FRAME = 0 # Computational steps per frame (supposedly 10 ms per
                     # frame). Can be adjusted with keyboard.
-THETA = 0.7 # Distance threshold ratio. Large values increase speed but
+THETA = 0.5 # Distance threshold ratio. Large values increase speed but
             # sacrifice accuracy.
 MAX_QUADTREE_DEPTH = 30
 
 TROJANS = 20
 FREE_ASTEROIDS = 20
 JUPITER_ORBITERS = 20
+
+EXTRA_PLANETOIDS = 0
+
+MAKE_PLANETS = True # Debug option to disable normal planet creation, inc. Sun
 
 
 
@@ -76,33 +85,39 @@ class MovementSystem(sdl2.ext.Applicator):
         comps = list(componentsets)
         
         for i in range(STEPS_PER_FRAME):
-            grav_data_tuples = [(mass.mass, position.x, position.y) for
-                                mass, position, velocity, acceleration in
+            grav_data_tuples = [(mass.mass, position.x, position.y, position.z)
+                                for mass, position, velocity, acceleration in
                                 comps]
 
-            root_node = QuadNode(grav_data_tuples, 10e13, 0, 0, is_root=True)
+            root_node = QuadNode(grav_data_tuples, 10e13, 0, 0, 0, is_root=True)
             
             for mass, position, velocity, acceleration in comps:
                 # Compute gravitational acceleration for step
-                ax, ay = root_node.get_gravity_at_point(position.x, position.y)
+                ax, ay, az = root_node.get_gravity_at_point(position.x,
+                                                            position.y,
+                                                            position.z)
                 acceleration.ax = ax
                 acceleration.ay = ay
+                acceleration.az = az
                 
                 velocity.vx += ax * time_step
                 velocity.vy += ay * time_step
+                velocity.vz += az * time_step
 
                 position.x += velocity.vx * time_step
                 position.y += velocity.vy * time_step
+                position.z += velocity.vz * time_step
                 
 
 class QuadNode():
     """A basic data structure tailored for the Barnes-Hut algorithm."""
-    def __init__(self, data_tuples, width, x, y, is_root=False, depth=0):
+    def __init__(self, data_tuples, width, x, y, z, is_root=False, depth=0):
         # data_tuples = [(mass, x, y)...]
         self.width = width
         self.mass = 0
         self.center_of_gravity_x = 0
         self.center_of_gravity_y = 0
+        self.center_of_gravity_z = 0
         self.is_internal = True
         self.is_root = is_root
         self.children = []
@@ -111,6 +126,7 @@ class QuadNode():
         if self.is_root:
             x_by_mass = 0
             y_by_mass = 0
+            z_by_mass = 0
             total_mass = 0
             
             for o in data_tuples:
@@ -118,79 +134,82 @@ class QuadNode():
                 total_mass += object_mass
                 object_x = o[1]
                 object_y = o[2]
+                object_z = o[3]
                 x_by_mass += object_x * object_mass
                 y_by_mass += object_y * object_mass
+                z_by_mass += object_z * object_mass
 
             self.x = x_by_mass / total_mass
             self.y = y_by_mass / total_mass
+            self.z = z_by_mass / total_mass
             
         length = len(data_tuples)
+
+        if self.is_root: # Debug...
+            print(length)
         
         if length > 1 and self.depth < MAX_QUADTREE_DEPTH:
-            nw_list = []
-            ne_list = []
-            sw_list = []
-            se_list = []
+            lists = ([],[],[],[],[],[],[],[])
             x_by_mass = 0
             y_by_mass = 0
+            z_by_mass = 0
             
             for o in data_tuples:
                 object_mass = o[0]
                 self.mass += object_mass
-                object_x = o[1]
-                object_y = o[2]
+                object_x, object_y, object_z = o[1:4]
+                
                 x_by_mass += object_x * object_mass
                 y_by_mass += object_y * object_mass
-                if object_y <= y: # Yes, this feels messed up - screen coords...
-                    if object_x <= x:
-                        nw_list.append(o)
-                    else:
-                        ne_list.append(o)
-                else:
-                    if object_x <= x:
-                        sw_list.append(o)
-                    else:
-                        se_list.append(o)
+                z_by_mass += object_z * object_mass
+
+                list_index = 0
+                if object_x > x:
+                    list_index += 4
+                if object_y > y:
+                    list_index += 2
+                if object_z > z:
+                    list_index += 1
+                lists[list_index].append(o)
 
             self.center_of_gravity_x = x_by_mass / self.mass
             self.center_of_gravity_y = y_by_mass / self.mass
+            self.center_of_gravity_z = z_by_mass / self.mass
             
             halfwidth = width/2
-            if nw_list:
-                self.children.append(QuadNode(nw_list, halfwidth,
-                                              x - halfwidth, y - halfwidth,
-                                              depth=self.depth+1))
-            if ne_list:
-                self.children.append(QuadNode(ne_list, halfwidth,
-                                              x + halfwidth, y - halfwidth,
-                                              depth=self.depth+1))
-            if sw_list:
-                self.children.append(QuadNode(sw_list, halfwidth,
-                                              x - halfwidth, y + halfwidth,
-                                              depth=self.depth+1))
-            if se_list:
-                self.children.append(QuadNode(se_list, halfwidth,
-                                              x + halfwidth, y + halfwidth,
-                                              depth=self.depth+1))
+
+            for i in range(8):
+                if lists[i]:
+                    node_x = x + halfwidth if i // 4 else x - halfwidth
+                    node_y = y + halfwidth if i % 4 // 2 else y - halfwidth
+                    node_z = z + halfwidth if i % 2 else z - halfwidth
+                    
+                    self.children.append(
+                        QuadNode(lists[i], halfwidth, node_x, node_y, node_z,
+                                 depth=self.depth+1))
                 
         elif length > 1 and self.depth == MAX_QUADTREE_DEPTH:
             # Most likely at least two objects are superimposed.
             x_by_mass = 0
             y_by_mass = 0
+            z_by_mass = 0
             
             for o in data_tuples:
                 object_mass = o[0]
                 self.mass += object_mass
                 object_x = o[1]
                 object_y = o[2]
+                object_z = o[3]
                 x_by_mass += object_x * object_mass
                 y_by_mass += object_y * object_mass
+                z_by_mass += object_z * object_mass
                 self.children.append(QuadNode([o,], width,
-                                              x, y,
+                                              x, y, z,
                                               depth=self.depth+1))
 
             self.center_of_gravity_x = x_by_mass / self.mass
             self.center_of_gravity_y = y_by_mass / self.mass
+            self.center_of_gravity_z = z_by_mass / self.mass
             
         elif length == 1:
             self.is_internal = False
@@ -198,57 +217,94 @@ class QuadNode():
             self.mass = astro_object[0]
             self.center_of_gravity_x = astro_object[1]
             self.center_of_gravity_y = astro_object[2]
+            self.center_of_gravity_z = astro_object[3]
             
-        else: # Should never happen
+        else: # Should never happen.
             self.is_internal = False
-            self.center_of_gravity = 0, 0
+            self.center_of_gravity = 0, 0, 0
             
-    def get_gravity_at_point(self, x, y):
+    def get_gravity_at_point(self, x, y, z):
         """Calculate the gravity exerted by this node at given point."""
-        if self.mass == 0:
-            return 0.0, 0.0
-        elif self.is_accurate_enough(x, y):
+        if self.mass == 0: # Should never happen.
+            return 0.0, 0.0, 0.0
+        elif self.is_accurate_enough(x, y, z): # Avert singularity
             if self.center_of_gravity_x == x and \
-               self.center_of_gravity_y == y:
-                return 0.0, 0.0
-            cog_x = self.center_of_gravity_x
-            cog_y = self.center_of_gravity_y
+               self.center_of_gravity_y == y and \
+               self.center_of_gravity_z == z:
+                return 0.0, 0.0, 0.0
+            delta_x = self.center_of_gravity_x - x
+            delta_y = self.center_of_gravity_y - y
+            delta_z = self.center_of_gravity_z - z
 
             # Gravitational acceleration generated at this location
             # by given object, as per Newton's gravitational equation,
             # but divided on both sides by the mass of the affected
-            # object. (Eigenvalue)
-            a = GRAV_CONSTANT * self.mass / ((cog_x - x)**2 +
-                                             (cog_y - y)**2)
-            
-            # Direction of the acceleration vector
-            direction = atan2(cog_y - y, cog_x - x)
-            # X and y components of the gravity vector
-            ax = a * cos(direction)
-            ay = a * sin(direction)
-            return ax, ay
+            # object. (Norm.)
+            a = GRAV_CONSTANT * self.mass / (delta_x * delta_x +
+                                             delta_y * delta_y +
+                                             delta_z * delta_z)
+
+            """TODO: Add actual Vector3 class to get directions in a reasonably
+            sane fashion."""
+            a_unit_vector = Vector3(delta_x, delta_y, delta_z).unit_vector()
+            a_vector = a_unit_vector.mul(a)
+            return a_vector.x, a_vector.y, a_vector.z
         else:
-            ax, ay = 0, 0
+            ax, ay, az = 0, 0, 0
             for n in self.children:
-                child_ax, child_ay = n.get_gravity_at_point(x,y)
+                child_ax, child_ay, child_az = n.get_gravity_at_point(x, y, z)
                 ax += child_ax
                 ay += child_ay
-            return ax, ay
+                az += child_az
+            return ax, ay, az
 
-    def is_accurate_enough(self, x, y):
+    def is_accurate_enough(self, x, y, z):
         """Determine if the current node is accurate enough for the given
         point."""
         if self.is_internal:
-            distance = sqrt((self.center_of_gravity_x - x) ** 2 +
-                            (self.center_of_gravity_y - y) ** 2)
-            if distance == 0: # Avert div by zero
+            delta_x = self.center_of_gravity_x - x
+            delta_y = self.center_of_gravity_y - y
+            delta_z = self.center_of_gravity_y - z
+            distance_squared = (delta_x * delta_x +
+                                delta_y * delta_y +
+                                delta_z * delta_z)
+                                
+            if distance_squared == 0: # Avert div by zero
                 return False
-            elif self.width / distance <= THETA:
+            elif self.width * self.width / distance_squared <= THETA * THETA:
                 return True
             else:
                 return False
         else:
             return True
+
+
+class Vector3:
+    """A minimalist 3-dimensional vector."""
+    def __init__(self, x, y, z):
+        self.x = x
+        self.y = y
+        self.z = z
+
+    def abs(self):
+        """Return vector magnitude."""
+        return sqrt(self.abs_squared())
+
+    def abs_squared(self):
+        """Return vector magnitude squared (to avoid expensive sqrt)."""
+        return self.x * self.x + self.y * self.y + self.z * self.z
+
+    def unit_vector(self):
+        """Return unit vector."""
+        norm = self.abs()
+        x = self.x / norm
+        y = self.y / norm
+        z = self.z / norm
+        return Vector3(x, y, z)
+
+    def mul(self, other):
+        return Vector3(self.x*other, self.y*other, self.z*other)
+    
 
 
 class SoftwareRenderSystem(sdl2.ext.SoftwareSpriteRenderSystem):
@@ -308,33 +364,39 @@ class Position(object):
         super(Position, self).__init__()
         self.x = 0
         self.y = 0
+        self.z = 0
 
 class Velocity(object):
     def __init__(self):
         super(Velocity, self).__init__()
         self.vx = 0
         self.vy = 0
+        self.vz = 0
 
 class Acceleration(object):
     def __init__(self):
         super(Acceleration, self).__init__()
         self.ax = 0
         self.ay = 0
+        self.az = 0
         
 
 class AstronomicalObject(sdl2.ext.Entity):
     """Model of an astronomical object (eg. star, planet, moon, asteroid)."""
-    def __init__(self, world, sprite, mass=0, posx=0, posy=0, vx=0, vy=0):
+    def __init__(self, world, sprite, mass=0, posx=0, posy=0, posz=0,
+                 vx=0, vy=0, vz=0):
         self.sprite = sprite
         self.sprite.position = camera.world_coord_to_screen_coord(posx,posy)
 
         self.position = Position()
         self.position.x = posx
         self.position.y = posy
+        self.position.z = posz
 
         self.velocity = Velocity()
         self.velocity.vx = vx
         self.velocity.vy = vy
+        self.velocity.vz = vz
         
         self.acceleration = Acceleration()
         self.mass = Mass()
@@ -381,6 +443,8 @@ def run():
 
     # Instantiate planets
     for astro_object in root.findall('object'):
+        if not MAKE_PLANETS:
+            break
         color_elem = astro_object.find('color')
         color = sdl2.ext.Color(int(color_elem[0].text),
                                int(color_elem[1].text),
@@ -390,10 +454,12 @@ def run():
                  10 ** int(astro_object.find('mass')[0].text))
         x = int(astro_object.find('position').find('x').text) * 1000
         y = int(astro_object.find('position').find('y').text) * 1000
+        z = int(astro_object.find('position').find('z').text) * 1000
         vx = float(astro_object.find('velocity').find('x').text) * 1000
         vy = float(astro_object.find('velocity').find('y').text) * 1000
-        astronomical_objects.append(AstronomicalObject(world, sprite,
-                                                       mass, x, y, vx, vy))
+        vz = float(astro_object.find('velocity').find('z').text) * 1000
+        astronomical_objects.append(AstronomicalObject(world, sprite, mass,
+                                                       x, y, z,  vx, vy, vz))
 
     # TODO: Refactor asteroid creation to function.
     # Instantiate some Trojans... or were they Greeks?
@@ -410,6 +476,7 @@ def run():
         pos_angle = vonmisesvariate(0,0)
         x = int(cos(pos_angle) * radius + x0)
         y = int(sin(pos_angle) * radius + y0)
+        z = 0
         # Start with orbital speed identical to that of Jupiter's.
         vel0 = 13.0697 * 1000
         vx0 = vel0 * cos(pi/3+pi/2)
@@ -419,8 +486,9 @@ def run():
         velocity = uniform(0,200)
         vx = cos(vel_angle) * velocity + vx0
         vy = sin(vel_angle) * velocity + vy0
-        astronomical_objects.append(AstronomicalObject(world, sprite,
-                                                       mass, x, y, vx, vy))
+        vz = 0
+        astronomical_objects.append(AstronomicalObject(world, sprite, mass,
+                                                       x, y, z, vx, vy, vz))
 
     # Instantiate some Jupiter Orbiters
     # Pretty messy. Should clean up a bit.
@@ -434,6 +502,7 @@ def run():
         pos_angle = vonmisesvariate(0,0)
         x = int(cos(pos_angle) * radius + x0)
         y = int(sin(pos_angle) * radius + y0)
+        z = 0
         # Start with orbital speed identical to that of Jupiter's.
         vx0, vy0 = 0, 13.0697 * 1000
         # Add significant noise to velocity.
@@ -441,8 +510,9 @@ def run():
         velocity = uniform(0,1e3)
         vx = cos(vel_angle) * velocity + vx0
         vy = sin(vel_angle) * velocity + vy0
-        astronomical_objects.append(AstronomicalObject(world, sprite,
-                                                       mass, x, y, vx, vy))
+        vz = 0
+        astronomical_objects.append(AstronomicalObject(world, sprite, mass,
+                                                       x, y, z, vx, vy, vz))
 
     # Instantiate some random asteroids.
     # Pretty messy. Should clean up a bit.
@@ -456,13 +526,38 @@ def run():
         pos_angle = vonmisesvariate(0,0)
         x = int(cos(pos_angle) * radius + x0)
         y = int(sin(pos_angle) * radius + y0)
+        z = 0
         # Add significant noise to velocity.
         vel_angle = vonmisesvariate(0,0)
         velocity = uniform(0,1e5)
         vx = cos(vel_angle) * velocity
         vy = sin(vel_angle) * velocity
-        astronomical_objects.append(AstronomicalObject(world, sprite,
-                                                       mass, x, y, vx, vy))
+        vz = 0
+        astronomical_objects.append(AstronomicalObject(world, sprite, mass,
+                                                       x, y, z, vx, vy, vz))
+
+    # Instantiate some random planetoids.
+    # Pretty messy. Should clean up a bit.
+    for i in range(EXTRA_PLANETOIDS):
+        sprite = factory.from_color(GRAY, size=(10, 10))
+        mass = 10e26 # Boring, heavy
+        # Put them dead center.
+        x0, y0 = 0, 0
+        # Add noise to location.
+        radius = randint(1e5, 1e12)
+        pos_angle = vonmisesvariate(0,0)
+        x = int(cos(pos_angle) * radius + x0)
+        y = int(sin(pos_angle) * radius + y0)
+        z = 0
+        # Add significant noise to velocity.
+        vel_angle = vonmisesvariate(0,0)
+        velocity = uniform(0,1e5)
+        vx = cos(vel_angle) * velocity
+        vy = sin(vel_angle) * velocity
+        vz = 0
+        astronomical_objects.append(AstronomicalObject(world, sprite, mass,
+                                                       x, y, z, vx, vy, vz))
+        
     
     running = True
     while running:
