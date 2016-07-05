@@ -3,13 +3,13 @@
 A numerical simulation of the planets of the Solar system.
 Also, some asteroids.
 
-Requires pysdl2 installed, and SDL2.dll in "c:\\Python27\\DLLs". May require
-fiddling.
+Requires pysdl2 installed. May require fiddling. (Windows: E.g. correct SDL2.dll
+in the System32 directory.)
 """
 
 import sys
 import os
-os.environ["PYSDL2_DLL_PATH"] = "c:\\Python27\\DLLs"
+#os.environ["PYSDL2_DLL_PATH"] = "c:\\Python27\\DLLs"
 import sdl2
 import sdl2.ext
 from math import *
@@ -73,7 +73,7 @@ class MovementSystem(sdl2.ext.Applicator):
         # Super clunky, but componentsets is apparently an iterator, not a list!
         comps = list(componentsets)
         
-        for i in xrange(STEPS_PER_FRAME):
+        for i in range(STEPS_PER_FRAME):
             grav_data_tuples = [(mass.mass, position.x, position.y) for
                                 mass, position, velocity, acceleration in
                                 comps]
@@ -396,7 +396,7 @@ def run():
     # TODO: Refactor asteroid creation to function.
     # Instantiate some Trojans... or were they Greeks?
     # Pretty messy. Should clean up a bit.
-    for i in xrange(TROJANS):
+    for i in range(TROJANS):
         sprite = factory.from_color(GRAY, size=(4, 4))
         mass = randint(1, 10000000) # Apparently, they're light. ;)
         # Put them on the same orbit as Jupiter.
@@ -422,7 +422,7 @@ def run():
 
     # Instantiate some Jupiter Orbiters
     # Pretty messy. Should clean up a bit.
-    for i in xrange(JUPITER_ORBITERS):
+    for i in range(JUPITER_ORBITERS):
         sprite = factory.from_color(GRAY, size=(4, 4))
         mass = randint(1, 10000000) # Apparently, they're light. ;)
         # Put them on the same orbit as Jupiter.
@@ -444,7 +444,7 @@ def run():
 
     # Instantiate some random asteroids.
     # Pretty messy. Should clean up a bit.
-    for i in xrange(FREE_ASTEROIDS):
+    for i in range(FREE_ASTEROIDS):
         sprite = factory.from_color(GRAY, size=(4, 4))
         mass = randint(1, 10000000) # Apparently, they're light. ;)
         # Put them on the same orbit as Jupiter.
