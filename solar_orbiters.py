@@ -78,39 +78,169 @@ class MovementSystem(sdl2.ext.Applicator):
 
     def process(self, world, componentsets):
         """Apply Barnes-Hut gravity algorithm (O(n log n))"""
+        
+
         # Squeeze some efficiency with local variables
         time_step = SECONDS_PER_STEP
         grav_constant = GRAV_CONSTANT
+        ts_squared = time_step * time_step
         # Super clunky, but componentsets is apparently an iterator, not a list!
         comps = list(componentsets)
         
         for i in range(STEPS_PER_FRAME):
-            grav_data_tuples = [(mass.mass, position.x, position.y, position.z)
-                                for mass, position, velocity, acceleration in
-                                comps]
+            self._apply_gravity(time_step, ts_squared, grav_constant, comps)
+            self._move_objects(time_step, comps)
+            self._check_collisions(time_step, comps)
 
-            root_node = QuadNode(grav_data_tuples, 10e13, 0, 0, 0, is_root=True)
+    def _apply_gravity(self, time_step, ts_squared, grav_constant, comps):
+        # Debug Jupiter
+        jupiter_string = 'Jupiter x:{}, y:{}, z:{}\n'.format(
+            jupiter.acceleration.ax,
+            jupiter.acceleration.ay,
+            jupiter.acceleration.az)
+        #print(jupiter_string)
+
+        grav_data_tuples = [(mass.mass, position.x, position.y, position.z)
+                            for mass, position, velocity, acceleration in
+                            comps]
+
+        root_node = BarnesHutOctNode(grav_data_tuples, 10e13, 0, 0, 0,
+                                     is_root=True)
+
+        for mass, position, velocity, acceleration in comps:
+            # Compute gravitational acceleration for step
+            ax, ay, az = root_node.get_gravity_at_point(position.x,
+                                                        position.y,
+                                                        position.z)
+            acceleration.ax = ax
+            acceleration.ay = ay
+            acceleration.az = az
+
+    def _move_objects(self, time_step, comps):
+        ts_squared = time_step * time_step
+        for mass, position, velocity, acceleration in comps:
+            ax = acceleration.ax
+            ay = acceleration.ay
+            az = acceleration.az
             
-            for mass, position, velocity, acceleration in comps:
-                # Compute gravitational acceleration for step
-                ax, ay, az = root_node.get_gravity_at_point(position.x,
-                                                            position.y,
-                                                            position.z)
-                acceleration.ax = ax
-                acceleration.ay = ay
-                acceleration.az = az
-                
-                velocity.vx += ax * time_step
-                velocity.vy += ay * time_step
-                velocity.vz += az * time_step
 
-                position.x += velocity.vx * time_step
-                position.y += velocity.vy * time_step
-                position.z += velocity.vz * time_step
-                
+            position.x += (velocity.vx * time_step +
+                           0.5 * ax * ts_squared)
+            position.y += (velocity.vy * time_step +
+                           0.5 * ay * ts_squared)
+            position.z += (velocity.vz * time_step +
+                           0.5 * az * ts_squared)
+            
+            velocity.vx += ax * time_step
+            velocity.vy += ay * time_step
+            velocity.vz += az * time_step
 
-class QuadNode():
-    """A basic data structure tailored for the Barnes-Hut algorithm."""
+    def _check_collisions(self, time_steps, comps):
+        collision_distance = 1e8 # Magic number: 10 000 km, say
+        position_list = [Vector3(position.x, position.y, position.z)
+                         for mass, position, velocity, acceleration in
+                         comps]
+        position_octree = Octree(position_list)
+        for v in position_list:
+            v_min = v.sub(collision_distance)
+            v_max = v.add(collision_distance)
+            if len(position_octree.objects_within_bb(v_min, v_max)) > 1:
+                print('Collision at {}!'.format(v))
+            
+            
+class Octree():
+    """A basic octree data structure.
+
+    For current state, data_list should be a list of Vector3."""
+    def __init__(self, data_list, max_obj_per_leaf=10, max_depth=30):
+        self.root = OctNode(data_list, max_obj_per_leaf, 0, max_depth)
+        
+
+    def objects_within_bb(self, position_min, position_max, node=None,
+                          objects=None):
+        """Return all objects within bounding box defined by two 3-vectors,
+        position_min and position_max. Shouldn't cause infinite recursion."""
+        if node is None:
+            node = self.root
+        if objects is None:
+            objects = []
+
+        if node.is_leaf:
+            for o in node.children:
+                if o.strictly_ge(position_min) and \
+                   o.strictly_le(position_max):
+                    objects.append(o)
+        else:
+            for n in node.children:
+                if n is None:
+                    continue
+                if n.min.strictly_le(position_max) and \
+                   n.max.strictly_ge(position_min):
+                    self.objects_within_bb(position_min, position_max, node=n,
+                                           objects=objects)
+        return objects
+
+
+class OctNode():
+    """A helper class for Octree"""
+    def __init__(self, data_list, max_obj_per_leaf, depth, max_depth):
+        self.is_leaf = True
+        self.children = []
+        self.depth = depth
+        self.min = None
+        self.max = None
+        self.center = None
+        self._set_bbox(data_list)
+        self._fill_node(data_list, max_obj_per_leaf, max_depth)
+
+    def _set_bbox(self, data_list):
+        """Set the """
+        self.min = Vector3(0,0,0)
+        self.max = Vector3(0,0,0)
+        for o in data_list:
+            if o.x < self.min.x:
+                   self.min.x = o.x
+            elif o.x > self.max.x:
+                   self.max.x = o.x
+            if o.y < self.min.y:
+               self.min.y = o.y
+            elif o.y > self.max.y:
+                self.max.y = o.y
+            if o.z < self.min.z:
+                self.min.z = o.z
+            elif o.z > self.max.z:
+                self.max.z = o.z
+        # Ugly. Override operators. Also a bit superfluous.
+        self.center = self.min.add(self.max.sub(self.min).mul(0.5))
+
+    def _fill_node(self, data_list, max_obj_per_leaf, max_depth):
+        """Add children to node. If more data than limit, create new nodes."""
+        if len(data_list) < max_obj_per_leaf or self.depth >= max_depth:
+            self.children = data_list
+        else:
+            self.is_leaf = False
+            bins = ([],[],[],[],[],[],[],[])
+            for o in data_list:
+                index = 0
+                if o.x > self.center.x:
+                    index += 4
+                if o.y > self.center.y:
+                    index += 2
+                if o.z > self.center.z:
+                    index += 1
+                bins[index].append(o)
+            for i in range(len(bins)):
+                if len(bins[i]) > 0:
+                    self.children.append(OctNode(bins[i], max_obj_per_leaf,
+                                                 self.depth+1, max_depth))
+                
+        
+
+class BarnesHutOctNode():
+    """A data structure tailored for the Barnes-Hut algorithm.
+
+    In desperate need of refactoring.
+    TODO: Refactor to follow Octree. Leaves should sprout sooner."""
     def __init__(self, data_tuples, width, x, y, z, is_root=False, depth=0):
         # data_tuples = [(mass, x, y)...]
         self.width = width
@@ -144,9 +274,6 @@ class QuadNode():
             self.z = z_by_mass / total_mass
             
         length = len(data_tuples)
-
-        if self.is_root: # Debug...
-            print(length)
         
         if length > 1 and self.depth < MAX_QUADTREE_DEPTH:
             lists = ([],[],[],[],[],[],[],[])
@@ -185,8 +312,9 @@ class QuadNode():
                     node_z = z + halfwidth if i % 2 else z - halfwidth
                     
                     self.children.append(
-                        QuadNode(lists[i], halfwidth, node_x, node_y, node_z,
-                                 depth=self.depth+1))
+                        BarnesHutOctNode(lists[i], halfwidth,
+                                         node_x, node_y, node_z,
+                                         depth=self.depth+1))
                 
         elif length > 1 and self.depth == MAX_QUADTREE_DEPTH:
             # Most likely at least two objects are superimposed.
@@ -203,9 +331,9 @@ class QuadNode():
                 x_by_mass += object_x * object_mass
                 y_by_mass += object_y * object_mass
                 z_by_mass += object_z * object_mass
-                self.children.append(QuadNode([o,], width,
-                                              x, y, z,
-                                              depth=self.depth+1))
+                self.children.append(BarnesHutOctNode([o,], width,
+                                                      x, y, z,
+                                                      depth=self.depth+1))
 
             self.center_of_gravity_x = x_by_mass / self.mass
             self.center_of_gravity_y = y_by_mass / self.mass
@@ -244,8 +372,6 @@ class QuadNode():
                                              delta_y * delta_y +
                                              delta_z * delta_z)
 
-            """TODO: Add actual Vector3 class to get directions in a reasonably
-            sane fashion."""
             a_unit_vector = Vector3(delta_x, delta_y, delta_z).unit_vector()
             a_vector = a_unit_vector.mul(a)
             return a_vector.x, a_vector.y, a_vector.z
@@ -281,10 +407,13 @@ class QuadNode():
 
 class Vector3:
     """A minimalist 3-dimensional vector."""
-    def __init__(self, x, y, z):
+    def __init__(self, x=0, y=0, z=0):
         self.x = x
         self.y = y
         self.z = z
+
+    def __str__(self):
+        return 'Vector3: [{}, {}, {}]'.format(self.x, self.y, self.z)
 
     def abs(self):
         """Return vector magnitude."""
@@ -292,7 +421,7 @@ class Vector3:
 
     def abs_squared(self):
         """Return vector magnitude squared (to avoid expensive sqrt)."""
-        return self.x * self.x + self.y * self.y + self.z * self.z
+        return self.dot(self)
 
     def unit_vector(self):
         """Return unit vector."""
@@ -303,8 +432,63 @@ class Vector3:
         return Vector3(x, y, z)
 
     def mul(self, other):
-        return Vector3(self.x*other, self.y*other, self.z*other)
-    
+        """Return product of vector and scalar."""
+        return Vector3(self.x * other, self.y * other, self.z * other)
+
+    def dot(self, other):
+        """Return dot product of vectors."""
+        return self.x * other.x + self.y * other.y + self.z * other.z
+
+    def cross(self, other):
+        """Return cross product of vectors.
+        TODO: Implement. Requires quaternions,
+        so import my-little-quaternion."""
+        return None
+
+    def add(self, other):
+        if isinstance(other, Vector3):
+            return Vector3(self.x+other.x, self.y+other.y, self.z+other.z)
+        elif isinstance(other, (int, float)):
+            # Not mathematically correct, but could be handy?
+            return Vector3(self.x+other, self.y+other, self.z+other)
+        else:
+            raise TypeError('Unsupported type.')
+
+    def sub(self, other):
+        if isinstance(other, Vector3):
+            return Vector3(self.x-other.x, self.y-other.y, self.z-other.z)
+        elif isinstance(other, (int, float)):
+            # Not mathematically correct, but could be handy?
+            return Vector3(self.x-other, self.y-other, self.z-other)
+        else:
+            raise TypeError('Unsupported type.')
+
+    def truediv(self, other):
+        if not isinstance(other, (int, float)):
+            raise TypeError('Only int and float supported.')
+        return Vector3(self.x/other, self.y/other, self.z/other)
+
+    def floordiv(self, other):
+        if not isinstance(other, (int, float)):
+            raise TypeError('Only int and float supported.')
+        return Vector3(self.x//other, self.y//other, self.z//other)
+
+    def strictly_le(self, other):
+        if not isinstance(other, Vector3):
+            raise TypeError('Only Vector3 supported.')
+        if self.x <= other.x and self.y <= other.y and self.z <= other.z:
+            return True
+        else:
+            return False
+
+    def strictly_ge(self, other):
+        if not isinstance(other, Vector3):
+            raise TypeError('Only Vector3 supported.')
+        if self.x >= other.x and self.y >= other.y and self.z >= other.z:
+            return True
+        else:
+            return False
+        
 
 
 class SoftwareRenderSystem(sdl2.ext.SoftwareSpriteRenderSystem):
@@ -404,7 +588,7 @@ class AstronomicalObject(sdl2.ext.Entity):
             
 
 def run():
-    global camera, STEPS_PER_FRAME
+    global camera, STEPS_PER_FRAME, jupiter # jupiter debug
 
     astronomical_objects = []
     
@@ -460,6 +644,8 @@ def run():
         vz = float(astro_object.find('velocity').find('z').text) * 1000
         astronomical_objects.append(AstronomicalObject(world, sprite, mass,
                                                        x, y, z,  vx, vy, vz))
+        if astro_object.attrib['name'] == 'Jupiter':
+            jupiter = astronomical_objects[-1]
 
     # TODO: Refactor asteroid creation to function.
     # Instantiate some Trojans... or were they Greeks?
@@ -584,7 +770,7 @@ def run():
                     STEPS_PER_FRAME = max(0, STEPS_PER_FRAME-1)
                     
         sdl2.SDL_Delay(10)
-        
+
         world.process()
 
 
