@@ -42,7 +42,7 @@ GRAY   = sdl2.ext.Color(150, 150, 150)
 GRAV_CONSTANT = 6.67408e-11 # For meters!
 
 SECONDS_PER_STEP = 3600 # The computation step in seconds
-STEPS_PER_FRAME = 1 # Computational steps per frame (supposedly 10 ms per
+STEPS_PER_FRAME = 0 # Computational steps per frame (supposedly 10 ms per
                     # frame). Can be adjusted with keyboard.
 THETA = 0.5 # Distance threshold ratio. Large values increase speed but
             # sacrifice accuracy.
@@ -85,8 +85,6 @@ class MovementSystem(sdl2.ext.Applicator):
 
     def process(self, world, componentsets):
         """Apply Barnes-Hut gravity algorithm (O(n log n))"""
-        
-
         # Squeeze some efficiency with local variables
         time_step = SECONDS_PER_STEP
         grav_constant = GRAV_CONSTANT
@@ -99,21 +97,18 @@ class MovementSystem(sdl2.ext.Applicator):
             self._check_collisions(time_step, comps)
 
     def _apply_gravity(self, time_step, ts_squared, grav_constant, comps):
-        grav_data_tuples = [(mass.mass, position.x, position.y, position.z)
+        grav_data_tuples = [(mass.mass, position)
                             for mass, position, velocity, acceleration in
                             comps]
 
-        root_node = BarnesHutOctNode(grav_data_tuples, 10e13, 0, 0, 0,
-                                     is_root=True)
+        gravity_tree = BarnesHutOctree(grav_data_tuples)
 
         for mass, position, velocity, acceleration in comps:
             # Compute gravitational acceleration for step
-            ax, ay, az = root_node.get_gravity_at_point(position.x,
-                                                        position.y,
-                                                        position.z)
-            acceleration.x = ax
-            acceleration.y = ay
-            acceleration.z = az
+            gravity = gravity_tree.get_gravity(position)
+            acceleration.x = gravity.x
+            acceleration.y = gravity.y
+            acceleration.z = gravity.z
 
     def _move_objects(self, time_step, comps):
         ts_squared = time_step * time_step
@@ -155,7 +150,7 @@ class Octree():
     """A basic octree data structure.
 
     For current state, data_list should be a list of Vector3."""
-    def __init__(self, data_list, max_obj_per_leaf=1, max_depth=30):
+    def __init__(self, data_list, max_obj_per_leaf=3, max_depth=30):
         self.root = OctNode(data_list, max_obj_per_leaf, 0, max_depth)
         
 
@@ -260,10 +255,14 @@ class OctNode():
                                                  path=self.path+str(i)))
                 
 class BarnesHutOctree:
-    def __init__(self, data_tuples, max_obj_per_leaf=1, max_depth=30,
+    """A data structure tailored for the Barnes-Hut algorithm.
+
+    See: https://en.wikipedia.org/wiki/Barnes-Hut_simulation
+
+    TODO: Refine bin division conditions.
+    TODO: Consider moving code from node class to tree class."""
+    def __init__(self, data_tuples, max_obj_per_leaf=4, max_depth=30,
                  min_width=1000):
-        """TODO: Refine bin division conditions.
-        TODO: Consider moving code from node class to tree class."""
         # data_tuples : [(mass, position_vector), ...]
         self.root = BarnesHutOctNode2(data_tuples, max_obj_per_leaf, 0,
                                       max_depth, min_width)
@@ -282,7 +281,7 @@ class BarnesHutOctNode2:
         self.min = None
         self.max = None
         self.center = None
-        self.width
+        self.width = None
         self.center_of_gravity = None
         self.mass = 0
         self._set_bbox(dt[1] for dt in data_tuples)
@@ -291,8 +290,8 @@ class BarnesHutOctNode2:
 
     def _set_bbox(self, data_iterable):
         """Set the bounding box and center for the node."""
-        self.min = next(data_iterable)
-        self.max = self.min
+        self.min = next(data_iterable).add(0)
+        self.max = self.min.add(0)
         for v in data_iterable:
             if v.x < self.min.x:
                    self.min.x = v.x
@@ -318,26 +317,27 @@ class BarnesHutOctNode2:
         else:
             self.is_leaf = False
             bins = ([],[],[],[],[],[],[],[])
-            for o in data_list:
+            for elem in data_list:
                 index = 0
-                if o.x > self.center.x:
+                if elem[1].x > self.center.x:
                     index += 4
-                if o.y > self.center.y:
+                if elem[1].y > self.center.y:
                     index += 2
-                if o.z > self.center.z:
+                if elem[1].z > self.center.z:
                     index += 1
-                bins[index].append(o)
+                bins[index].append(elem)
             for i in range(len(bins)):
                 if len(bins[i]) > 0:
-                    self.children.append(OctNode(bins[i], max_obj_per_leaf,
-                                                 self.depth+1, max_depth))
+                    self.children.append(
+                        BarnesHutOctNode2(bins[i], max_obj_per_leaf,
+                                          self.depth+1, max_depth, min_width))
 
     def init_gravity(self):
         """Initialize gravity in the node and its children."""
         position_mass_product_sum = Vector3()
         mass_sum = 0
 
-        if self.leaf:
+        if self.is_leaf:
             for mass, position in self.children:
                 mass_sum += mass
                 position_mass_product_sum = position_mass_product_sum.add(
@@ -355,9 +355,6 @@ class BarnesHutOctNode2:
     def get_gravity(self, position):
         """Return gravitational acceleration exerted by this node (or its
         children) at the given position."""
-        if self._is_accurate_enough(position):
-            return self.calculate_gravity(self.mass, self.center_of_gravity,
-                                          position)
         gravity = Vector3()
         
         if self.is_leaf:
@@ -365,9 +362,12 @@ class BarnesHutOctNode2:
                 partial_gravity = self.calculate_gravity(mass, mass_position,
                                                          position)
                 gravity = gravity.add(partial_gravity)
+        elif self._is_accurate_enough(position):
+            gravity = self.calculate_gravity(self.mass, self.center_of_gravity,
+                                            position)
         else:
             for node in self.children:
-                partial_gravity = node.get_gravity()
+                partial_gravity = node.get_gravity(position)
                 gravity = gravity.add(partial_gravity)
                 
         return gravity
@@ -376,10 +376,15 @@ class BarnesHutOctNode2:
         """Calculate and return gravitational acceleration exerted by the given
         at the given position."""
         vector_to_mass = mass_position.sub(grav_position)
-        gravity = GRAV_CONSTANT \
-                  * mass \
-                  / vector_to_mass.abs_squared()
-        gravity = gravity.add()
+        if vector_to_mass.x == 0 and vector_to_mass.y == 0 and \
+           vector_to_mass.z == 0:
+            return Vector3()
+
+        gravity_mag = GRAV_CONSTANT \
+                      * mass \
+                      / vector_to_mass.abs_squared()
+        gravity = vector_to_mass.unit_vector().mul(gravity_mag)
+        return gravity
 
 
     def _is_accurate_enough(self, position):
@@ -388,177 +393,6 @@ class BarnesHutOctNode2:
         vector_to_position = position.sub(self.center_of_gravity)
         distance_squared = vector_to_position.abs_squared() # Avoid sqrt.
         return self.width * self.width / distance_squared <= THETA * THETA
-
-
-class BarnesHutOctNode():
-    """A data structure tailored for the Barnes-Hut algorithm.
-
-    See: https://en.wikipedia.org/wiki/Barnes-Hut_simulation
-
-    In desperate need of refactoring.
-    TODO: Refactor to follow Octree. Leaves should sprout sooner."""
-    def __init__(self, data_tuples, width, x, y, z, is_root=False, depth=0):
-        # data_tuples = [(mass, x, y, z)...]
-        self.width = width
-        self.mass = 0
-        self.center_of_gravity_x = 0
-        self.center_of_gravity_y = 0
-        self.center_of_gravity_z = 0
-        self.is_internal = True
-        self.is_root = is_root
-        self.children = []
-        self.depth = depth
-
-        if self.is_root:
-            x_by_mass = 0
-            y_by_mass = 0
-            z_by_mass = 0
-            total_mass = 0
-            
-            for o in data_tuples:
-                object_mass = o[0]
-                total_mass += object_mass
-                object_x = o[1]
-                object_y = o[2]
-                object_z = o[3]
-                x_by_mass += object_x * object_mass
-                y_by_mass += object_y * object_mass
-                z_by_mass += object_z * object_mass
-
-            self.x = x_by_mass / total_mass
-            self.y = y_by_mass / total_mass
-            self.z = z_by_mass / total_mass
-            
-        length = len(data_tuples)
-        
-        if length > 1 and self.depth < MAX_QUADTREE_DEPTH:
-            lists = ([],[],[],[],[],[],[],[])
-            x_by_mass = 0
-            y_by_mass = 0
-            z_by_mass = 0
-            
-            for o in data_tuples:
-                object_mass = o[0]
-                self.mass += object_mass
-                object_x, object_y, object_z = o[1:4]
-                
-                x_by_mass += object_x * object_mass
-                y_by_mass += object_y * object_mass
-                z_by_mass += object_z * object_mass
-
-                list_index = 0
-                if object_x > x:
-                    list_index += 4
-                if object_y > y:
-                    list_index += 2
-                if object_z > z:
-                    list_index += 1
-                lists[list_index].append(o)
-
-            self.center_of_gravity_x = x_by_mass / self.mass
-            self.center_of_gravity_y = y_by_mass / self.mass
-            self.center_of_gravity_z = z_by_mass / self.mass
-            
-            halfwidth = width/2
-
-            for i in range(8):
-                if lists[i]:
-                    node_x = x + halfwidth if i // 4 else x - halfwidth
-                    node_y = y + halfwidth if i % 4 // 2 else y - halfwidth
-                    node_z = z + halfwidth if i % 2 else z - halfwidth
-                    
-                    self.children.append(
-                        BarnesHutOctNode(lists[i], halfwidth,
-                                         node_x, node_y, node_z,
-                                         depth=self.depth+1))
-                
-        elif length > 1 and self.depth == MAX_QUADTREE_DEPTH:
-            # Most likely at least two objects are superimposed.
-            x_by_mass = 0
-            y_by_mass = 0
-            z_by_mass = 0
-            
-            for o in data_tuples:
-                object_mass = o[0]
-                self.mass += object_mass
-                object_x = o[1]
-                object_y = o[2]
-                object_z = o[3]
-                x_by_mass += object_x * object_mass
-                y_by_mass += object_y * object_mass
-                z_by_mass += object_z * object_mass
-                self.children.append(BarnesHutOctNode([o,], width,
-                                                      x, y, z,
-                                                      depth=self.depth+1))
-
-            self.center_of_gravity_x = x_by_mass / self.mass
-            self.center_of_gravity_y = y_by_mass / self.mass
-            self.center_of_gravity_z = z_by_mass / self.mass
-            
-        elif length == 1:
-            self.is_internal = False
-            astro_object = data_tuples[0]
-            self.mass = astro_object[0]
-            self.center_of_gravity_x = astro_object[1]
-            self.center_of_gravity_y = astro_object[2]
-            self.center_of_gravity_z = astro_object[3]
-            
-        else: # Should never happen.
-            self.is_internal = False
-            self.center_of_gravity = 0, 0, 0
-            
-    def get_gravity_at_point(self, x, y, z):
-        """Calculate the gravity exerted by this node at given point."""
-        if self.mass == 0: # Should never happen.
-            return 0.0, 0.0, 0.0
-        elif self.is_accurate_enough(x, y, z): # Avert singularity
-            if self.center_of_gravity_x == x and \
-               self.center_of_gravity_y == y and \
-               self.center_of_gravity_z == z:
-                return 0.0, 0.0, 0.0
-            delta_x = self.center_of_gravity_x - x
-            delta_y = self.center_of_gravity_y - y
-            delta_z = self.center_of_gravity_z - z
-
-            # Gravitational acceleration generated at this location
-            # by given object, as per Newton's gravitational equation,
-            # but divided on both sides by the mass of the affected
-            # object. (Norm.)
-            a = GRAV_CONSTANT * self.mass / (delta_x * delta_x +
-                                             delta_y * delta_y +
-                                             delta_z * delta_z)
-
-            a_unit_vector = Vector3(delta_x, delta_y, delta_z).unit_vector()
-            a_vector = a_unit_vector.mul(a)
-            return a_vector.x, a_vector.y, a_vector.z
-        else:
-            ax, ay, az = 0, 0, 0
-            for n in self.children:
-                child_ax, child_ay, child_az = n.get_gravity_at_point(x, y, z)
-                ax += child_ax
-                ay += child_ay
-                az += child_az
-            return ax, ay, az
-
-    def is_accurate_enough(self, x, y, z):
-        """Determine if the current node is accurate enough for the given
-        point."""
-        if self.is_internal:
-            delta_x = self.center_of_gravity_x - x
-            delta_y = self.center_of_gravity_y - y
-            delta_z = self.center_of_gravity_y - z
-            distance_squared = (delta_x * delta_x +
-                                delta_y * delta_y +
-                                delta_z * delta_z)
-                                
-            if distance_squared == 0: # Avert div by zero
-                return False
-            elif self.width * self.width / distance_squared <= THETA * THETA:
-                return True
-            else:
-                return False
-        else:
-            return True
 
 
 class Vector3:
@@ -643,6 +477,14 @@ class Vector3:
         if not isinstance(other, Vector3):
             raise TypeError('Only Vector3 supported.')
         if self.x >= other.x and self.y >= other.y and self.z >= other.z:
+            return True
+        else:
+            return False
+
+    def eq(self, other):
+        if not isinstance(other, Vector3):
+            raise TypeError('Only Vector3 supported.')
+        if self.x == other.x and self.y == other.y and self.z == other.z:
             return True
         else:
             return False
