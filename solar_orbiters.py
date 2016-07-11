@@ -8,9 +8,15 @@ Requires Python 3 and pysdl2 installed. May require fiddling. (Windows: E.g.
 correct SDL2.dll in the System32 directory.)
 
 DEBUG: Weird loss of gravity and disappearance of Jupiter (singularity?)
+    Apparently caused by reaching max bin depth...
+    Barnes-Hut code really obtuse -> Need to refactor.
 
 TODO: Extend to 3d.
     TODO: Extend Camera to 3d.
+
+TODO: Move redundant code (or code of very general nature) somewhere else.
+    TODO: Move generice Octree and Octnode to their own module.
+    TODO: Move Vector3 to it's own module.
 """
 
 import sys
@@ -21,6 +27,7 @@ import sdl2.ext
 from math import *
 from random import *
 import xml.etree.ElementTree as ET
+from typing import Iterable
 
 ASTRO_OBJECTS_XML_PATH = 'astro_objects.xml'
 WINDOW_SIZE = 800, 600
@@ -35,16 +42,16 @@ GRAY   = sdl2.ext.Color(150, 150, 150)
 GRAV_CONSTANT = 6.67408e-11 # For meters!
 
 SECONDS_PER_STEP = 3600 # The computation step in seconds
-STEPS_PER_FRAME = 0 # Computational steps per frame (supposedly 10 ms per
+STEPS_PER_FRAME = 1 # Computational steps per frame (supposedly 10 ms per
                     # frame). Can be adjusted with keyboard.
 THETA = 0.5 # Distance threshold ratio. Large values increase speed but
             # sacrifice accuracy.
 MAX_QUADTREE_DEPTH = 30
 
-TROJANS = 20
-FREE_ASTEROIDS = 20
-JUPITER_ORBITERS = 20
-
+# Number of extra objects to twirl in the simulation.
+TROJANS = 0
+FREE_ASTEROIDS = 0
+JUPITER_ORBITERS = 0
 EXTRA_PLANETOIDS = 0
 
 MAKE_PLANETS = True # Debug option to disable normal planet creation, inc. Sun
@@ -86,20 +93,12 @@ class MovementSystem(sdl2.ext.Applicator):
         ts_squared = time_step * time_step
         # Super clunky, but componentsets is apparently an iterator, not a list!
         comps = list(componentsets)
-        
         for i in range(STEPS_PER_FRAME):
             self._apply_gravity(time_step, ts_squared, grav_constant, comps)
             self._move_objects(time_step, comps)
             self._check_collisions(time_step, comps)
 
     def _apply_gravity(self, time_step, ts_squared, grav_constant, comps):
-        # Debug Jupiter
-        jupiter_string = 'Jupiter x:{}, y:{}, z:{}\n'.format(
-            jupiter.acceleration.ax,
-            jupiter.acceleration.ay,
-            jupiter.acceleration.az)
-        #print(jupiter_string)
-
         grav_data_tuples = [(mass.mass, position.x, position.y, position.z)
                             for mass, position, velocity, acceleration in
                             comps]
@@ -112,31 +111,31 @@ class MovementSystem(sdl2.ext.Applicator):
             ax, ay, az = root_node.get_gravity_at_point(position.x,
                                                         position.y,
                                                         position.z)
-            acceleration.ax = ax
-            acceleration.ay = ay
-            acceleration.az = az
+            acceleration.x = ax
+            acceleration.y = ay
+            acceleration.z = az
 
     def _move_objects(self, time_step, comps):
         ts_squared = time_step * time_step
         for mass, position, velocity, acceleration in comps:
-            ax = acceleration.ax
-            ay = acceleration.ay
-            az = acceleration.az
+            ax = acceleration.x
+            ay = acceleration.y
+            az = acceleration.z
             
 
-            position.x += (velocity.vx * time_step +
+            position.x += (velocity.x * time_step +
                            0.5 * ax * ts_squared)
-            position.y += (velocity.vy * time_step +
+            position.y += (velocity.y * time_step +
                            0.5 * ay * ts_squared)
-            position.z += (velocity.vz * time_step +
+            position.z += (velocity.z * time_step +
                            0.5 * az * ts_squared)
             
-            velocity.vx += ax * time_step
-            velocity.vy += ay * time_step
-            velocity.vz += az * time_step
+            velocity.x += ax * time_step
+            velocity.y += ay * time_step
+            velocity.z += az * time_step
 
     def _check_collisions(self, time_steps, comps):
-        collision_distance = 1e8 # Magic number: 10 000 km, say
+        collision_distance = 1e6 # Magic number: 1000 km, say
         position_list = [Vector3(position.x, position.y, position.z)
                          for mass, position, velocity, acceleration in
                          comps]
@@ -144,15 +143,19 @@ class MovementSystem(sdl2.ext.Applicator):
         for v in position_list:
             v_min = v.sub(collision_distance)
             v_max = v.add(collision_distance)
-            if len(position_octree.objects_within_bb(v_min, v_max)) > 1:
-                print('Collision at {}!'.format(v))
+            colliders = position_octree.objects_within_bb(v_min, v_max)
+            if len(colliders) > 1: # Just a debug print atm.
+                print('Collision! {}'.format(v))
+                print(position_octree)
+                for pos in position_list:
+                    print(pos)
             
             
 class Octree():
     """A basic octree data structure.
 
     For current state, data_list should be a list of Vector3."""
-    def __init__(self, data_list, max_obj_per_leaf=10, max_depth=30):
+    def __init__(self, data_list, max_obj_per_leaf=1, max_depth=30):
         self.root = OctNode(data_list, max_obj_per_leaf, 0, max_depth)
         
 
@@ -180,41 +183,62 @@ class Octree():
                                            objects=objects)
         return objects
 
+    def __str__(self):
+        string = 'Octree, nodes:\n'
+        string += str(self.root) # Recursive, mind you!
+        return string
+
 
 class OctNode():
     """A helper class for Octree"""
-    def __init__(self, data_list, max_obj_per_leaf, depth, max_depth):
+    def __init__(self, data_list, max_obj_per_leaf, depth, max_depth, path=''):
         self.is_leaf = True
         self.children = []
         self.depth = depth
         self.min = None
         self.max = None
         self.center = None
+        self.path = path
         self._set_bbox(data_list)
         self._fill_node(data_list, max_obj_per_leaf, max_depth)
 
+    def __str__(self):
+        string = self.path + ' OctNode\n'
+        if self.is_leaf:
+            vector_strings = [' ' * self.depth + str(c) + '\n' for c in
+                              self.children]
+            string += ''.join(vector_strings)
+        else:
+            node_strings = [str(node) for node in self.children]
+            string += ''.join(node_strings)
+        return string
+            
+
     def _set_bbox(self, data_list):
-        """Set the """
-        self.min = Vector3(0,0,0)
-        self.max = Vector3(0,0,0)
-        for o in data_list:
-            if o.x < self.min.x:
-                   self.min.x = o.x
-            elif o.x > self.max.x:
-                   self.max.x = o.x
-            if o.y < self.min.y:
-               self.min.y = o.y
-            elif o.y > self.max.y:
-                self.max.y = o.y
-            if o.z < self.min.z:
-                self.min.z = o.z
-            elif o.z > self.max.z:
-                self.max.z = o.z
-        # Ugly. Override operators. Also a bit superfluous.
+        """Set the bounding box and center for the node."""
+        if not data_list:
+            return
+        self.min = data_list[0].add(0)
+        self.max = self.min.add(0)
+        for v in data_list:
+            if v.x < self.min.x:
+                   self.min.x = v.x
+            elif v.x > self.max.x:
+                   self.max.x = v.x
+            if v.y < self.min.y:
+               self.min.y = v.y
+            elif v.y > self.max.y:
+                self.max.y = v.y
+            if v.z < self.min.z:
+                self.min.z = v.z
+            elif v.z > self.max.z:
+                self.max.z = v.z
+        # Ugly below. Override operators in Vector3. Also a bit superfluous.
         self.center = self.min.add(self.max.sub(self.min).mul(0.5))
 
     def _fill_node(self, data_list, max_obj_per_leaf, max_depth):
-        """Add children to node. If more data than limit, create new nodes."""
+        """Add children to node, unless more data than limit, in which case
+        create new nodes as children and divide the data among them."""
         if len(data_list) < max_obj_per_leaf or self.depth >= max_depth:
             self.children = data_list
         else:
@@ -232,17 +256,149 @@ class OctNode():
             for i in range(len(bins)):
                 if len(bins[i]) > 0:
                     self.children.append(OctNode(bins[i], max_obj_per_leaf,
-                                                 self.depth+1, max_depth))
+                                                 self.depth+1, max_depth,
+                                                 path=self.path+str(i)))
                 
+class BarnesHutOctree:
+    def __init__(self, data_tuples, max_obj_per_leaf=1, max_depth=30,
+                 min_width=1000):
+        """TODO: Refine bin division conditions.
+        TODO: Consider moving code from node class to tree class."""
+        # data_tuples : [(mass, position_vector), ...]
+        self.root = BarnesHutOctNode2(data_tuples, max_obj_per_leaf, 0,
+                                      max_depth, min_width)
+        self.root.init_gravity()
+
+    def get_gravity(self, position):
+        return self.root.get_gravity(position)
+    
+
+class BarnesHutOctNode2:
+    def __init__(self, data_tuples, max_obj_per_leaf, depth, max_depth,
+                 min_width):
+        self.is_leaf = True
+        self.children = []
+        self.depth = depth
+        self.min = None
+        self.max = None
+        self.center = None
+        self.width
+        self.center_of_gravity = None
+        self.mass = 0
+        self._set_bbox(dt[1] for dt in data_tuples)
+        self._fill_node(data_tuples, max_obj_per_leaf, max_depth, min_width)
         
+
+    def _set_bbox(self, data_iterable):
+        """Set the bounding box and center for the node."""
+        self.min = next(data_iterable)
+        self.max = self.min
+        for v in data_iterable:
+            if v.x < self.min.x:
+                   self.min.x = v.x
+            elif v.x > self.max.x:
+                   self.max.x = v.x
+            if v.y < self.min.y:
+               self.min.y = v.y
+            elif v.y > self.max.y:
+                self.max.y = v.y
+            if v.z < self.min.z:
+                self.min.z = v.z
+            elif v.z > self.max.z:
+                self.max.z = v.z
+        # Ugly below. Override operators in Vector3. Also a bit superfluous.
+        self.center = self.min.add(self.max.sub(self.min).mul(0.5))
+        self.width = self.max.sub(self.min).abs()
+
+    def _fill_node(self, data_list, max_obj_per_leaf, max_depth, min_width):
+        """Add children to node. If more data than limit, create new nodes."""
+        if len(data_list) < max_obj_per_leaf or self.depth >= max_depth or \
+           self.width < min_width:
+            self.children = data_list
+        else:
+            self.is_leaf = False
+            bins = ([],[],[],[],[],[],[],[])
+            for o in data_list:
+                index = 0
+                if o.x > self.center.x:
+                    index += 4
+                if o.y > self.center.y:
+                    index += 2
+                if o.z > self.center.z:
+                    index += 1
+                bins[index].append(o)
+            for i in range(len(bins)):
+                if len(bins[i]) > 0:
+                    self.children.append(OctNode(bins[i], max_obj_per_leaf,
+                                                 self.depth+1, max_depth))
+
+    def init_gravity(self):
+        """Initialize gravity in the node and its children."""
+        position_mass_product_sum = Vector3()
+        mass_sum = 0
+
+        if self.leaf:
+            for mass, position in self.children:
+                mass_sum += mass
+                position_mass_product_sum = position_mass_product_sum.add(
+                    position.mul(mass))
+        else:
+            for node in self.children:
+                node.init_gravity()
+                mass_sum += node.mass
+                position_mass_product_sum = position_mass_product_sum.add(
+                    node.center_of_gravity.mul(node.mass))
+
+        self.mass = mass_sum
+        self.center_of_gravity = position_mass_product_sum.truediv(mass_sum)
+
+    def get_gravity(self, position):
+        """Return gravitational acceleration exerted by this node (or its
+        children) at the given position."""
+        if self._is_accurate_enough(position):
+            return self.calculate_gravity(self.mass, self.center_of_gravity,
+                                          position)
+        gravity = Vector3()
+        
+        if self.is_leaf:
+            for mass, mass_position in self.children:
+                partial_gravity = self.calculate_gravity(mass, mass_position,
+                                                         position)
+                gravity = gravity.add(partial_gravity)
+        else:
+            for node in self.children:
+                partial_gravity = node.get_gravity()
+                gravity = gravity.add(partial_gravity)
+                
+        return gravity
+                
+    def calculate_gravity(self, mass, mass_position, grav_position):
+        """Calculate and return gravitational acceleration exerted by the given
+        at the given position."""
+        vector_to_mass = mass_position.sub(grav_position)
+        gravity = GRAV_CONSTANT \
+                  * mass \
+                  / vector_to_mass.abs_squared()
+        gravity = gravity.add()
+
+
+    def _is_accurate_enough(self, position):
+        """Determine if current node is accurate enough for gravity
+        approximation."""
+        vector_to_position = position.sub(self.center_of_gravity)
+        distance_squared = vector_to_position.abs_squared() # Avoid sqrt.
+        return self.width * self.width / distance_squared <= THETA * THETA
+
 
 class BarnesHutOctNode():
     """A data structure tailored for the Barnes-Hut algorithm.
 
+    See: https://en.wikipedia.org/wiki/Barnes-Hut_simulation
+
     In desperate need of refactoring.
     TODO: Refactor to follow Octree. Leaves should sprout sooner."""
     def __init__(self, data_tuples, width, x, y, z, is_root=False, depth=0):
-        # data_tuples = [(mass, x, y)...]
+        # data_tuples = [(mass, x, y, z)...]
         self.width = width
         self.mass = 0
         self.center_of_gravity_x = 0
@@ -406,7 +562,9 @@ class BarnesHutOctNode():
 
 
 class Vector3:
-    """A minimalist 3-dimensional vector."""
+    """A minimalist 3-dimensional vector.
+
+    TODO: Override operators."""
     def __init__(self, x=0, y=0, z=0):
         self.x = x
         self.y = y
@@ -543,26 +701,17 @@ class Mass(object):
         super(Mass, self).__init__()
         self.mass = 0
 
-class Position(object):
+class Position(Vector3):
     def __init__(self):
         super(Position, self).__init__()
-        self.x = 0
-        self.y = 0
-        self.z = 0
 
-class Velocity(object):
+class Velocity(Vector3):
     def __init__(self):
         super(Velocity, self).__init__()
-        self.vx = 0
-        self.vy = 0
-        self.vz = 0
 
-class Acceleration(object):
+class Acceleration(Vector3):
     def __init__(self):
         super(Acceleration, self).__init__()
-        self.ax = 0
-        self.ay = 0
-        self.az = 0
         
 
 class AstronomicalObject(sdl2.ext.Entity):
@@ -578,9 +727,9 @@ class AstronomicalObject(sdl2.ext.Entity):
         self.position.z = posz
 
         self.velocity = Velocity()
-        self.velocity.vx = vx
-        self.velocity.vy = vy
-        self.velocity.vz = vz
+        self.velocity.x = vx
+        self.velocity.y = vy
+        self.velocity.z = vz
         
         self.acceleration = Acceleration()
         self.mass = Mass()
@@ -588,7 +737,7 @@ class AstronomicalObject(sdl2.ext.Entity):
             
 
 def run():
-    global camera, STEPS_PER_FRAME, jupiter # jupiter debug
+    global camera, STEPS_PER_FRAME, world
 
     astronomical_objects = []
     
@@ -605,8 +754,6 @@ def run():
         factory = sdl2.ext.SpriteFactory(sdl2.ext.SOFTWARE)
 
     world = sdl2.ext.World()
-
-    # movement = MovementSystem(0, 0, 800, 600)
     
     if factory.sprite_type == sdl2.ext.SOFTWARE:
         spriterenderer = SoftwareRenderSystem(window)
@@ -644,8 +791,6 @@ def run():
         vz = float(astro_object.find('velocity').find('z').text) * 1000
         astronomical_objects.append(AstronomicalObject(world, sprite, mass,
                                                        x, y, z,  vx, vy, vz))
-        if astro_object.attrib['name'] == 'Jupiter':
-            jupiter = astronomical_objects[-1]
 
     # TODO: Refactor asteroid creation to function.
     # Instantiate some Trojans... or were they Greeks?
@@ -726,7 +871,7 @@ def run():
     # Pretty messy. Should clean up a bit.
     for i in range(EXTRA_PLANETOIDS):
         sprite = factory.from_color(GRAY, size=(10, 10))
-        mass = 10e26 # Boring, heavy
+        mass = 1e28 # Boring, heavy
         # Put them dead center.
         x0, y0 = 0, 0
         # Add noise to location.
@@ -737,7 +882,7 @@ def run():
         z = 0
         # Add significant noise to velocity.
         vel_angle = vonmisesvariate(0,0)
-        velocity = uniform(0,1e5)
+        velocity = uniform(0,5e4)
         vx = cos(vel_angle) * velocity
         vy = sin(vel_angle) * velocity
         vz = 0
