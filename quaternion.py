@@ -14,7 +14,9 @@ TODO: Refactor to override operators.
 TODO: Add vector rotation and quaternion interpolation?
 TODO: Override operators.
     TODO: Add reversed operators.
-TODO: Refactor into an immutable object. (Inherit from tuple?)"""
+TODO: Refactor into an immutable object. (Inherit from tuple?)
+TODO: Improve error messages.
+TODO: rotate: Expand vector and axis types to Vector3 and tuple."""
 
 import math
 
@@ -139,8 +141,8 @@ class Quaternion:
 
     def inverse(self):
         """Return the inverse of the quaternion. I.e. q**(-1)."""
-        
-        return self.conjugate().__truediv__(self.__dot__(self))
+        # Avoid redundant sqrt and ** 2
+        return self.conjugate().__truediv__(self.__mul__(self))
 
     def real(self):
         """Return the real (or scalar) part of the quaternion."""
@@ -156,8 +158,55 @@ class Quaternion:
     def norm(self):
         """An alias for Quaternion.abs()"""
         return self.__abs__()
-        
-    
+
+    def __lt__(self, other):
+        if not isinstance(other, (int, float, Vector3)):
+            raise TypeError("Type of other not acceptable.")
+            
+        return self.__mul__(self) < other.__mul__(other)
+
+    def __le__(self, other):
+        if not isinstance(other, (int, float, Vector3)):
+            raise TypeError("Type of other not acceptable.")
+            
+        return self.__mul__(self) <= other.__mul__(other)
+
+    def __eq__(self, other):
+        if not isinstance(other, (int, float, Vector3)):
+            raise TypeError("Type of other not acceptable.")
+            
+        return self.__mul__(self) == other.__mul__(other)
+
+    def __ne__(self, other):
+        if not isinstance(other, (int, float, Vector3)):
+            raise TypeError("Type of other not acceptable.")
+            
+        return self.__mul__(self) != other.__mul__(other)
+
+    def __ge__(self, other):
+        if not isinstance(other, (int, float, Vector3)):
+            raise TypeError("Type of other not acceptable.")
+            
+        return self.__mul__(self) >= other.__mul__(other)
+
+    def __gt__(self, other):
+        if not isinstance(other, (int, float, Vector3)):
+            raise TypeError("Type of other not acceptable.")
+            
+        return self.__mul__(self) > other.__mul__(other)
+
+
+def rotate(vector, axis, angle):
+    """Rotate given 3d vector (given as an imaginary quaternion) along an axis
+    (given as an imaginary quaternion) by angle. Beware of rounding errors.
+
+    TODO: Expand vector and axis types to Vector3 and tuple."""
+    half_angle_cos = math.cos(angle/2)
+    half_angle_sin = math.sin(angle/2)
+    q = Quaternion(half_angle_cos,0,0,0) + half_angle_sin * axis.normalize()
+    q_inverse = q.conjugate() # Since q is a unit quaternion, q**(-1) == g*
+    return q @ vector @ q_inverse
+
 
 if __name__ == '__main__':
     # TODO: Add tests...
