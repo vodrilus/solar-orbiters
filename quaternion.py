@@ -10,10 +10,7 @@ https://pypi.python.org/pypi/quaternions/
 TODO: Add tests to "main" section.
 TODO: Expand methods to accept also non-Quaternions (such as scalars).
 TODO: Handle error creep.
-TODO: Refactor to override operators.
-TODO: Add vector rotation and quaternion interpolation?
-TODO: Override operators.
-    TODO: Add reversed operators.
+TODO: Add quaternion interpolation?
 TODO: Improve error messages.
 TODO: rotate: Expand vector and axis types to Vector3 and tuple."""
 
@@ -144,7 +141,7 @@ class Quaternion(namedtuple('Quaternion', 's x y z')):
         return Quaternion(self.s, 0, 0, 0)
     
     def imaginary(self):
-        """Return the imaginary (or vector) part of the quaternion."""
+        """Return the imaginary (or 3d vector) part of the quaternion."""
         return Quaternion(0, self.x, self.y, self.z)
 
     def normalize(self):
