@@ -33,7 +33,7 @@ from math import *
 from random import *
 import xml.etree.ElementTree as ET
 from typing import Iterable
-import my-little-quaternion as mlq
+import quaternion as quat
 
 ASTRO_OBJECTS_XML_PATH = 'astro_objects.xml'
 WINDOW_SIZE = 800, 600
