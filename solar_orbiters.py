@@ -1,22 +1,27 @@
 #!/usr/bin/env python3
 """Solar orbiters
 
-A numerical simulation of the planets of the Solar system.
-Also, some asteroids.
+A numerical, Newtonian and very inaccurate simulation of the planets of the
+Solar system. Also, some asteroids.
 
 Requires Python 3 and pysdl2 installed. May require fiddling. (Windows: E.g.
 correct SDL2.dll in the System32 directory.)
 
-DEBUG: Weird loss of gravity and disappearance of Jupiter (singularity?)
-    Apparently caused by reaching max bin depth...
-    Barnes-Hut code really obtuse -> Need to refactor.
-
 TODO: Extend to 3d.
     TODO: Extend Camera to 3d.
 
-TODO: Move redundant code (or code of very general nature) somewhere else.
-    TODO: Move generice Octree and Octnode to their own module.
+TODO: Move redundant code (or code of very general nature) somewhere else?
+    TODO: Move generic Octree and Octnode to their own module.
     TODO: Move Vector3 to it's own module.
+
+TODO: Improve graphical output.
+    TODO: Draw current velocity as a vector
+    TODO: Draw gravitational acceleration as a vector
+    TODO: Draw orbits (raw estimate from velocity and acceleration)
+
+TODO: Improve Vector3 class
+    TODO: Make immutable.
+    TODO: Override operators.    
 """
 
 import sys
@@ -28,6 +33,7 @@ from math import *
 from random import *
 import xml.etree.ElementTree as ET
 from typing import Iterable
+import my-little-quaternion as mlq
 
 ASTRO_OBJECTS_XML_PATH = 'astro_objects.xml'
 WINDOW_SIZE = 800, 600
@@ -84,7 +90,6 @@ class MovementSystem(sdl2.ext.Applicator):
         self.is_gravity_initialized = False
 
     def process(self, world, componentsets):
-        """Apply Barnes-Hut gravity algorithm (O(n log n))"""
         # Squeeze some efficiency with local variables
         time_step = SECONDS_PER_STEP
         grav_constant = GRAV_CONSTANT
@@ -94,9 +99,10 @@ class MovementSystem(sdl2.ext.Applicator):
         for i in range(STEPS_PER_FRAME):
             self._apply_gravity(time_step, ts_squared, grav_constant, comps)
             self._move_objects(time_step, comps)
-            self._check_collisions(time_step, comps)
+            #self._check_collisions(time_step, comps)
 
     def _apply_gravity(self, time_step, ts_squared, grav_constant, comps):
+        """Apply Barnes-Hut gravity algorithm (O(n log n))"""
         grav_data_tuples = [(mass.mass, position)
                             for mass, position, velocity, acceleration in
                             comps]
@@ -535,6 +541,56 @@ class Camera():
         x_screen = int((x_world - self.x) / self.scale + w_width / 2 )
         y_screen = int((y_world - self.y) / self.scale + w_height / 2 )
         return x_screen, y_screen
+
+class Camera3D:
+    def __init__(self, position=None, forward=None, up=None):
+        if position is None:
+            self.position = Vector3(0,0,3e11) # High above the plane
+        else:
+            self.position = position
+        if forward is None:
+            self.forward = Vector3(0,0,-1)
+        else:
+            self.forward = forward
+        if up is None:
+            self.up = Vector3(0,1,0)
+        else:
+            self.up = up
+        self.x_min = 0
+        self.y_min = 0
+        self.x_max, self.y_max = WINDOW_SIZE
+        self.x_center = self.x_max // 2
+        self.y_center = self.y_max // 2
+        self.z = 1
+
+    def rotate_horizontally(self, phi):
+        pass
+
+    def rotate_vertically(self, phi):
+        pass
+
+    def rotate(self, phi):
+        pass
+
+    def world_to_screen_space(self, position):
+        """Translate and rotate given position to screen space."""
+        # TODO:
+        # vector from camera to position
+        # rotate vector
+        # scale correctly?
+        return position
+
+    def get_screen_coords(self, position):
+        position = self.world_to_screen_space(position)
+        if position.z < self.z:
+            return None
+        x = int(self.x_center + position.x * position.z // self.z)
+        if x < 0 or x > self.max_x:
+            return None
+        y = int(self.y_center + position.y * position.z // self.z)
+        if y < 0 or y > self.max_y:
+            return None
+        return x, y
 
 
 # Define data bags
