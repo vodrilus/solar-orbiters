@@ -14,19 +14,14 @@ TODO: Refactor to override operators.
 TODO: Add vector rotation and quaternion interpolation?
 TODO: Override operators.
     TODO: Add reversed operators.
-TODO: Refactor into an immutable object. (Inherit from tuple?)
 TODO: Improve error messages.
 TODO: rotate: Expand vector and axis types to Vector3 and tuple."""
 
 import math
+from collections import namedtuple
 
-class Quaternion:
+class Quaternion(namedtuple('Quaternion', 's x y z')):
     """A quaternion."""
-    def __init__(self, s=0, x=0, y=0, z=0):
-        self.s = s
-        self.x = x
-        self.y = y
-        self.z = z
 
     def __str__(self):
         return 'Quaternion: {} + {}i + {}j + {}k'.format(self.s, self.x,
