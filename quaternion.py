@@ -11,7 +11,9 @@ TODO: Add tests to "main" section.
 TODO: Expand methods to accept also non-Quaternions (such as scalars).
 TODO: Handle error creep.
 TODO: Refactor to override operators.
-TODO: Add vector rotation and quaternion interpolation?"""
+TODO: Add vector rotation and quaternion interpolation?
+TODO: Override operators.
+TODO: Refactor into an immutable object. (Inherit from tuple?)"""
 
 import math
 
@@ -27,7 +29,7 @@ class Quaternion:
         return 'Quaternion: {} + {}i + {}j + {}k'.format(self.s, self.x,
                                                          self.y, self.z)
 
-    def add(self, other):
+    def __add__(self, other):
         """Return sum of this and another quaternion."""
         if not isinstance(other, Quaternion):
             raise TypeError("other not Quaternion")
