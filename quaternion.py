@@ -13,6 +13,7 @@ TODO: Handle error creep.
 TODO: Refactor to override operators.
 TODO: Add vector rotation and quaternion interpolation?
 TODO: Override operators.
+    TODO: Add reversed operators.
 TODO: Refactor into an immutable object. (Inherit from tuple?)"""
 
 import math
@@ -41,7 +42,7 @@ class Quaternion:
 
         return Quaternion(s,x,y,z)
 
-    def sub(self, other):
+    def __sub__(self, other):
         """Return difference of this and another quaternion."""
         if not isinstance(other, Quaternion):
             raise TypeError("other not Quaternion")
@@ -53,17 +54,9 @@ class Quaternion:
 
         return Quaternion(s,x,y,z)
 
-    def mul(self, other):
-        """Return product of the quaternion or a scalar or a quaternion."""
-        if isinstance(other, (int, float)):
-            s = self.s * other
-            x = self.x * other
-            y = self.y * other
-            z = self.z * other
-            
-            return Quaternion(s, x, y, z)
-        
-        elif isinstance(other, Quaternion):
+    def __matmul__(self, other):
+        """Return (matrix) product of two quaternions."""
+        if isinstance(other, Quaternion):
             s_1, x_1, y_1, z_1 = self.s, self.x, self.y, self.z
             s_2, x_2, y_2, z_2 = other.s, other.x, other.y, other.z
 
@@ -77,17 +70,29 @@ class Quaternion:
         else:
             raise TypeError("Type of other not acceptable.")
 
-    def dot(self, other):
-        """Return dot product of both quaternions."""
+    def __mul__(self, other):
+        """Return elementwise (dot) product of two quaternions or a quaternion
+        and a scalar (integer or float)."""
         if isinstance(other, Quaternion):
             return (self.s * other.s +
                     self.x * other.x +
                     self.y * other.y +
                     self.z * other.z)
+        elif isinstance(other, (int, float)):
+            s = self.s * other
+            x = self.x * other
+            y = self.y * other
+            z = self.z * other
+            
+            return Quaternion(s, x, y, z)
         else:
-            raise TypeError("other not Quaternion") # TODO: Expand?
+            raise TypeError("Type of other not acceptable.")
 
-    def truediv(self, other):
+    def __rmul__(self, other):
+        """Return reversed product (is commutative) of quaternion and scalar."""
+        return self.__mul__(other)
+
+    def __truediv__(self, other):
         """Return true division."""
         if isinstance(other, (int, float)):
             s = self.s / other
@@ -97,17 +102,30 @@ class Quaternion:
 
             return Quaternion(s, x, y, z)
         elif isinstance(other, Quaternion):
+            # Quaternion division is not mathematically defined
             raise TypeError("Division by quaternion not supported.")
         else:
             raise TypeError("Type of other not acceptable.")
 
-    def abs(self):
+    def __floordiv__(self, other):
+        """Return floor division. Might not make sense."""
+        if isinstance(other, (int, float)):
+            s = self.s // other
+            x = self.x // other
+            y = self.y // other
+            z = self.z // other
+
+            return Quaternion(s, x, y, z)
+        elif isinstance(other, Quaternion):
+            # Quaternion division is not mathematically defined
+            raise TypeError("Division by quaternion not supported.")
+        else:
+            raise TypeError("Type of other not acceptable.")
+
+    def __abs__(self):
         """Return magnitude or norm of the quaternion."""
 
-        return math.sqrt(self.s * self.s +
-                         self.x * self.x +
-                         self.y * self.y +
-                         self.z * self.z)
+        return math.sqrt(self.__mul__(self))
 
     def conjugate(self):
         """Return the conjugate of the quaternion (i.e. with negated imaginary
@@ -122,7 +140,7 @@ class Quaternion:
     def inverse(self):
         """Return the inverse of the quaternion. I.e. q**(-1)."""
         
-        return self.conjugate().truediv(self.abs()*self.abs())
+        return self.conjugate().__truediv__(self.__dot__(self))
 
     def real(self):
         """Return the real (or scalar) part of the quaternion."""
@@ -132,12 +150,12 @@ class Quaternion:
         """Return the imaginary (or vector) part of the quaternion."""
         return Quaternion(0, self.x, self.y, self.z)
 
-    def unit_quaternion(self):
-        return self.imaginary().truediv(self.imaginary().abs())
+    def normalize(self):
+        return self.__truediv__(self.__abs__())
 
     def norm(self):
         """An alias for Quaternion.abs()"""
-        return self.abs()
+        return self.__abs__()
         
     
 
