@@ -1,7 +1,7 @@
 """My Little Quaternion
 
-A tiny, super-humble and inefficient module to handle quaternions. Inspired by
-this lovely article: http://www.3dgep.com/understanding-quaternions/
+A tiny, super-humble and inefficient module to handle quaternions for Python3.
+Inspired by this lovely article: http://www.3dgep.com/understanding-quaternions/
 
 For implementations closer to production code, visit the Cheese Shop, e.g.
 https://pypi.python.org/pypi/Quaternion/ or
@@ -198,6 +198,23 @@ def rotate(vector, axis, angle):
     q = Quaternion(half_angle_cos,0,0,0) + half_angle_sin * axis.normalize()
     q_inverse = q.conjugate() # Since q is a unit quaternion, q**(-1) == g*
     return q @ vector @ q_inverse
+
+def angle(vector1, vector2):
+    """Return the angle between vector1 and vector2 in radians [0, pi]."""
+    u1 = vector1.normalize()
+    u2 = vector2.normalize()
+    cosine = u1 * u2
+    if cosine == 1.0:
+        return 0
+    elif cosine == -1.0:
+        return math.pi
+    elif cosine == 0.0:
+        return math.pi/2
+
+    # Unit vectors: sine == sqrt(1.0 ** 2 - cosine ** 2) if angle within [0, pi]
+    tangent = math.sqrt(1.0 - cosine * cosine) / cosine
+    
+    return math.atan(tangent)
 
 
 if __name__ == '__main__':
