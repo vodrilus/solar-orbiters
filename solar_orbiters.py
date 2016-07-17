@@ -7,14 +7,12 @@ Solar system. Also, some asteroids.
 Requires Python 3 and pysdl2 installed. May require fiddling. (Windows: E.g.
 correct SDL2.dll in the System32 directory.)
 
-TODO: Extend to 3d.
-    TODO: Extend Camera to 3d.
-
 TODO: Move redundant code (or code of very general nature) somewhere else?
     TODO: Move generic Octree and Octnode to their own module.
     TODO: Move Vector3 to it's own module.
 
 TODO: Improve graphical output.
+    TODO: Improve visual ques (drawing depth, size, stars)
     TODO: Draw current velocity as a vector
     TODO: Draw gravitational acceleration as a vector
     TODO: Draw orbits (raw estimate from velocity and acceleration)
@@ -26,11 +24,10 @@ TODO: Improve Vector3 class
 
 import sys
 import os
-#os.environ["PYSDL2_DLL_PATH"] = "c:\\Python27\\DLLs"
 import sdl2
 import sdl2.ext
-from math import *
-from random import *
+import math
+import random
 import xml.etree.ElementTree as ET
 from typing import Iterable
 import quaternion as quat
@@ -75,8 +72,7 @@ class SpriteMovementSystem(sdl2.ext.Applicator):
         local_camera = camera # Minor hack to minimize global variable access.
         for position, sprite in componentsets:
             swidth, sheight = sprite.size
-            sprite.x, sprite.y = local_camera.world_coord_to_screen_coord(
-                position.x, position.y)
+            sprite.x, sprite.y = local_camera.world_to_screen_space(position)
             sprite.x -= swidth // 2
             sprite.y -= sheight // 2
         
@@ -415,7 +411,7 @@ class Vector3:
 
     def abs(self):
         """Return vector magnitude."""
-        return sqrt(self.abs_squared())
+        return math.sqrt(self.abs_squared())
 
     def abs_squared(self):
         """Return vector magnitude squared (to avoid expensive sqrt)."""
@@ -543,54 +539,78 @@ class Camera():
         return x_screen, y_screen
 
 class Camera3D:
+    """An experimental camera class to display 3d views of the solar system.
+
+    Error creep is an issue: Directional vectors might not always remain
+    perpendicular to each other, screwing up the display.
+
+    Also: DEBUG."""
     def __init__(self, position=None, forward=None, up=None):
         if position is None:
-            self.position = Vector3(0,0,3e11) # High above the plane
+            self.position = quat.Quaternion(0,0,0,3e11) # High above the plane
         else:
             self.position = position
         if forward is None:
-            self.forward = Vector3(0,0,-1)
+            self.forward = quat.Quaternion(0,0,0,-1)
         else:
             self.forward = forward
         if up is None:
-            self.up = Vector3(0,1,0)
+            self.up = quat.Quaternion(0,0,1,0)
         else:
             self.up = up
+        # Refactor the crap below.
         self.x_min = 0
         self.y_min = 0
         self.x_max, self.y_max = WINDOW_SIZE
         self.x_center = self.x_max // 2
         self.y_center = self.y_max // 2
-        self.z = 1
+        self.z = self.x_center # Try this for size.
+        self.minimum_distance = 10000 # 10 km
 
-    def rotate_horizontally(self, phi):
-        pass
+    def pitch(self, phi):
+        """Pitch camera, positive phi down."""
+        left = (self.up @ self.forward).normalize()
+        self.forward = quat.rotate(self.forward, left, phi).normalize()
+        self.up = quat.rotate(self.up, left, phi).normalize()
 
-    def rotate_vertically(self, phi):
-        pass
+    def yaw(self, phi):
+        """Yaw camera, positive phi right."""
+        self.forward = quat.rotate(self.forward, self.up, -phi).normalize()
 
-    def rotate(self, phi):
-        pass
+    def roll(self, phi):
+        """Roll camera, positive phi right."""
+        self.up = quat.rotate(self.up, self.forward, phi).normalize()
 
     def world_to_screen_space(self, position):
-        """Translate and rotate given position to screen space."""
-        # TODO:
-        # vector from camera to position
-        # rotate vector
-        # scale correctly?
-        return position
+        """Translate given position to screen space."""
+        relat_pos = quat.Quaternion(0,
+                                    position.x - self.position.x,
+                                    position.y - self.position.y,
+                                    position.z - self.position.z)
+        distance = abs(relat_pos)
+        forward_length = relat_pos * self.forward
+        if forward_length < self.minimum_distance:
+            return -1, -1
+        vertical_length = relat_pos * self.up
+        vertical_tangent = vertical_length / forward_length
+        lateral_length = relat_pos * (self.forward @ self.up)
+        lateral_tangent = lateral_length / forward_length
 
-    def get_screen_coords(self, position):
-        position = self.world_to_screen_space(position)
-        if position.z < self.z:
-            return None
-        x = int(self.x_center + position.x * position.z // self.z)
-        if x < 0 or x > self.max_x:
-            return None
-        y = int(self.y_center + position.y * position.z // self.z)
-        if y < 0 or y > self.max_y:
-            return None
-        return x, y
+        x = self.x_center + self.z * lateral_tangent
+        y = self.y_center - self.z * vertical_tangent
+        
+        return int(x), int(y)
+
+    def translate(self, forward, up, right):
+        delta_forward = forward * 1000000000 * self.forward 
+        delta_up = up * 1000000000 * self.up
+        delta_right = right * 1000000000 * (self.forward @ self.up)
+        self.position += delta_forward
+        self.position += delta_up
+        self.position += delta_right
+
+    def zoom(self, increment):
+        self.z = max(1, int(self.z * 2 ** increment))
 
 
 # Define data bags
@@ -600,38 +620,32 @@ class Mass(object):
         self.mass = 0
 
 class Position(Vector3):
-    def __init__(self):
-        super(Position, self).__init__()
+    def __init__(self, x=0, y=0, z=0):
+        super(Position, self).__init__(x, y, z)
 
 class Velocity(Vector3):
-    def __init__(self):
-        super(Velocity, self).__init__()
+    def __init__(self, x=0, y=0, z=0):
+        super(Velocity, self).__init__(x, y, z)
 
 class Acceleration(Vector3):
-    def __init__(self):
-        super(Acceleration, self).__init__()
+    def __init__(self, x=0, y=0, z=0):
+        super(Acceleration, self).__init__(x, y, z)
         
 
 class AstronomicalObject(sdl2.ext.Entity):
     """Model of an astronomical object (eg. star, planet, moon, asteroid)."""
     def __init__(self, world, sprite, mass=0, posx=0, posy=0, posz=0,
                  vx=0, vy=0, vz=0):
-        self.sprite = sprite
-        self.sprite.position = camera.world_coord_to_screen_coord(posx,posy)
+        self.position = Position(posx, posy, posz)
 
-        self.position = Position()
-        self.position.x = posx
-        self.position.y = posy
-        self.position.z = posz
-
-        self.velocity = Velocity()
-        self.velocity.x = vx
-        self.velocity.y = vy
-        self.velocity.z = vz
+        self.velocity = Velocity(vx, vy, vz)
         
         self.acceleration = Acceleration()
         self.mass = Mass()
         self.mass.mass = mass
+
+        self.sprite = sprite
+        self.sprite.position = camera.world_to_screen_space(self.position)
             
 
 def run():
@@ -660,7 +674,7 @@ def run():
 
     movementsystem = MovementSystem()
     spritemovementsystem = SpriteMovementSystem()
-    camera = Camera()
+    camera = Camera3D()
 
     world.add_system(spriterenderer)
     world.add_system(movementsystem)
@@ -795,18 +809,34 @@ def run():
                 running = False
                 break
             if event.type == sdl2.SDL_KEYDOWN:
-                if event.key.keysym.sym == sdl2.SDLK_UP:
-                    camera.move(0,-10)
-                elif event.key.keysym.sym == sdl2.SDLK_DOWN:
-                    camera.move(0,10)
-                elif event.key.keysym.sym == sdl2.SDLK_LEFT:
-                    camera.move(-10,0)
-                elif event.key.keysym.sym == sdl2.SDLK_RIGHT:
-                    camera.move(10,0)
+                if event.key.keysym.sym == sdl2.SDLK_h:
+                    camera.translate(1,0,0)
+                elif event.key.keysym.sym == sdl2.SDLK_n:
+                    camera.translate(-1,0,0)
+                elif event.key.keysym.sym == sdl2.SDLK_i:
+                    camera.translate(0,1,0)
+                elif event.key.keysym.sym == sdl2.SDLK_k:
+                    camera.translate(0,-1,0)
+                elif event.key.keysym.sym == sdl2.SDLK_j:
+                    camera.translate(0,0,-1)
+                elif event.key.keysym.sym == sdl2.SDLK_l:
+                    camera.translate(0,0,1)
                 elif event.key.keysym.sym == sdl2.SDLK_x:
-                    camera.zoom(1.1111111)
+                    camera.zoom(0.1)
                 elif event.key.keysym.sym == sdl2.SDLK_z:
-                    camera.zoom(0.9)
+                    camera.zoom(-0.1)
+                elif event.key.keysym.sym == sdl2.SDLK_w:
+                    camera.pitch(0.1)
+                elif event.key.keysym.sym == sdl2.SDLK_s:
+                    camera.pitch(-0.1)
+                elif event.key.keysym.sym == sdl2.SDLK_a:
+                    camera.yaw(-0.1)
+                elif event.key.keysym.sym == sdl2.SDLK_d:
+                    camera.yaw(0.1)
+                elif event.key.keysym.sym == sdl2.SDLK_q:
+                    camera.roll(-0.1)
+                elif event.key.keysym.sym == sdl2.SDLK_e:
+                    camera.roll(0.1)
                 elif event.key.keysym.sym == sdl2.SDLK_PERIOD:
                     STEPS_PER_FRAME += 1
                 elif event.key.keysym.sym == sdl2.SDLK_COMMA:
