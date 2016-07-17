@@ -52,9 +52,9 @@ THETA = 0.5 # Distance threshold ratio. Large values increase speed but
 MAX_QUADTREE_DEPTH = 30
 
 # Number of extra objects to twirl in the simulation.
-TROJANS = 0
-FREE_ASTEROIDS = 0
-JUPITER_ORBITERS = 0
+TROJANS = 10
+FREE_ASTEROIDS = 10
+JUPITER_ORBITERS = 10
 EXTRA_PLANETOIDS = 0
 
 MAKE_PLANETS = True # Debug option to disable normal planet creation, inc. Sun
@@ -394,6 +394,8 @@ class BarnesHutOctNode2:
         approximation."""
         vector_to_position = position.sub(self.center_of_gravity)
         distance_squared = vector_to_position.abs_squared() # Avoid sqrt.
+        if distance_squared == 0:
+            return True
         return self.width * self.width / distance_squared <= THETA * THETA
 
 
@@ -602,9 +604,9 @@ class Camera3D:
         return int(x), int(y)
 
     def translate(self, forward, up, right):
-        delta_forward = forward * 1000000000 * self.forward 
-        delta_up = up * 1000000000 * self.up
-        delta_right = right * 1000000000 * (self.forward @ self.up)
+        delta_forward = forward * 1e10 * self.forward 
+        delta_up = up * 1e10 * self.up
+        delta_right = right * 1e10 * (self.forward @ self.up)
         self.position += delta_forward
         self.position += delta_up
         self.position += delta_right
@@ -709,26 +711,26 @@ def run():
     # Pretty messy. Should clean up a bit.
     for i in range(TROJANS):
         sprite = factory.from_color(GRAY, size=(4, 4))
-        mass = randint(1, 10000000) # Apparently, they're light. ;)
+        mass = random.randint(1, 10000000) # Apparently, they're light. ;)
         # Put them on the same orbit as Jupiter.
         origin = 778412010000
-        x0 = origin*cos(pi/3)
-        y0 = origin*sin(pi/3)
+        x0 = origin*math.cos(math.pi/3)
+        y0 = origin*math.sin(math.pi/3)
         # Add noise to location.
-        radius = randint(0, 100000000000)
-        pos_angle = vonmisesvariate(0,0)
-        x = int(cos(pos_angle) * radius + x0)
-        y = int(sin(pos_angle) * radius + y0)
+        radius = random.randint(0, 100000000000)
+        pos_angle = random.vonmisesvariate(0,0)
+        x = int(math.cos(pos_angle) * radius + x0)
+        y = int(math.sin(pos_angle) * radius + y0)
         z = 0
         # Start with orbital speed identical to that of Jupiter's.
         vel0 = 13.0697 * 1000
-        vx0 = vel0 * cos(pi/3+pi/2)
-        vy0 = vel0 * sin(pi/3+pi/2)
+        vx0 = vel0 * math.cos(math.pi/3+math.pi/2)
+        vy0 = vel0 * math.sin(math.pi/3+math.pi/2)
         # Add significant noise to velocity.
-        vel_angle = vonmisesvariate(0,0)
-        velocity = uniform(0,200)
-        vx = cos(vel_angle) * velocity + vx0
-        vy = sin(vel_angle) * velocity + vy0
+        vel_angle = random.vonmisesvariate(0,0)
+        velocity = random.uniform(0,200)
+        vx = math.cos(vel_angle) * velocity + vx0
+        vy = math.sin(vel_angle) * velocity + vy0
         vz = 0
         astronomical_objects.append(AstronomicalObject(world, sprite, mass,
                                                        x, y, z, vx, vy, vz))
@@ -737,22 +739,22 @@ def run():
     # Pretty messy. Should clean up a bit.
     for i in range(JUPITER_ORBITERS):
         sprite = factory.from_color(GRAY, size=(4, 4))
-        mass = randint(1, 10000000) # Apparently, they're light. ;)
+        mass = random.randint(1, 10000000) # Apparently, they're light. ;)
         # Put them on the same orbit as Jupiter.
         x0, y0 = 778412010000, 0
         # Add noise to location.
-        radius = randint(1e3, 1e11)
-        pos_angle = vonmisesvariate(0,0)
-        x = int(cos(pos_angle) * radius + x0)
-        y = int(sin(pos_angle) * radius + y0)
+        radius = random.randint(1e3, 1e11)
+        pos_angle = random.vonmisesvariate(0,0)
+        x = int(math.cos(pos_angle) * radius + x0)
+        y = int(math.sin(pos_angle) * radius + y0)
         z = 0
         # Start with orbital speed identical to that of Jupiter's.
         vx0, vy0 = 0, 13.0697 * 1000
         # Add significant noise to velocity.
-        vel_angle = vonmisesvariate(0,0)
-        velocity = uniform(0,1e3)
-        vx = cos(vel_angle) * velocity + vx0
-        vy = sin(vel_angle) * velocity + vy0
+        vel_angle = random.vonmisesvariate(0,0)
+        velocity = random.uniform(0,1e3)
+        vx = math.cos(vel_angle) * velocity + vx0
+        vy = math.sin(vel_angle) * velocity + vy0
         vz = 0
         astronomical_objects.append(AstronomicalObject(world, sprite, mass,
                                                        x, y, z, vx, vy, vz))
@@ -761,20 +763,20 @@ def run():
     # Pretty messy. Should clean up a bit.
     for i in range(FREE_ASTEROIDS):
         sprite = factory.from_color(GRAY, size=(4, 4))
-        mass = randint(1, 10000000) # Apparently, they're light. ;)
+        mass = random.randint(1, 10000000) # Apparently, they're light. ;)
         # Put them on the same orbit as Jupiter.
         x0, y0 = 0, 0
         # Add noise to location.
-        radius = randint(1e5, 1e12)
-        pos_angle = vonmisesvariate(0,0)
-        x = int(cos(pos_angle) * radius + x0)
-        y = int(sin(pos_angle) * radius + y0)
+        radius = random.randint(1e5, 1e12)
+        pos_angle = random.vonmisesvariate(0,0)
+        x = int(math.cos(pos_angle) * radius + x0)
+        y = int(math.sin(pos_angle) * radius + y0)
         z = 0
         # Add significant noise to velocity.
-        vel_angle = vonmisesvariate(0,0)
-        velocity = uniform(0,1e5)
-        vx = cos(vel_angle) * velocity
-        vy = sin(vel_angle) * velocity
+        vel_angle = random.vonmisesvariate(0,0)
+        velocity = random.uniform(0,1e5)
+        vx = math.cos(vel_angle) * velocity
+        vy = math.sin(vel_angle) * velocity
         vz = 0
         astronomical_objects.append(AstronomicalObject(world, sprite, mass,
                                                        x, y, z, vx, vy, vz))
@@ -787,16 +789,16 @@ def run():
         # Put them dead center.
         x0, y0 = 0, 0
         # Add noise to location.
-        radius = randint(1e5, 1e12)
-        pos_angle = vonmisesvariate(0,0)
-        x = int(cos(pos_angle) * radius + x0)
-        y = int(sin(pos_angle) * radius + y0)
+        radius = random.randint(1e5, 1e12)
+        pos_angle = random.vonmisesvariate(0,0)
+        x = int(math.cos(pos_angle) * radius + x0)
+        y = int(math.sin(pos_angle) * radius + y0)
         z = 0
         # Add significant noise to velocity.
-        vel_angle = vonmisesvariate(0,0)
-        velocity = uniform(0,5e4)
-        vx = cos(vel_angle) * velocity
-        vy = sin(vel_angle) * velocity
+        vel_angle = random.vonmisesvariate(0,0)
+        velocity = random.uniform(0,5e4)
+        vx = math.cos(vel_angle) * velocity
+        vy = math.sin(vel_angle) * velocity
         vz = 0
         astronomical_objects.append(AstronomicalObject(world, sprite, mass,
                                                        x, y, z, vx, vy, vz))
