@@ -7,10 +7,12 @@
 		<position>
 			<x>0</x>
 			<y>0</y>
+			<z>0</z>
 		</position>
 		<velocity>
 			<x>0</x>
 			<y>0</y>
+			<z>0</z>
 		</velocity>
 		<color>
 			<r>255</r>
@@ -25,10 +27,12 @@
 		<position>
 			<x>57909175</x>
 			<y>0</y>
+			<z>0</z>
 		</position>
 		<velocity>
 			<x>0</x>
 			<y>47.8725</y>
+			<z>0</z>
 		</velocity>
 		<color>
 			<r>150</r>
@@ -43,10 +47,12 @@
 		<position>
 			<x>108208930</x>
 			<y>0</y>
+			<z>0</z>
 		</position>
 		<velocity>
 			<x>0</x>
 			<y>35.0214</y>
+			<z>0</z>
 		</velocity>
 		<color>
 			<r>220</r>
@@ -61,10 +67,12 @@
 		<position>
 			<x>149597890</x>
 			<y>0</y>
+			<z>0</z>
 		</position>
 		<velocity>
 			<x>0</x>
 			<y>29.7859</y>
+			<z>0</z>
 		</velocity>
 		<color>
 			<r>40</r>
@@ -79,10 +87,12 @@
 		<position>
 			<x>227936640</x>
 			<y>0</y>
+			<z>0</z>
 		</position>
 		<velocity>
 			<x>0</x>
 			<y>24.1309</y>
+			<z>0</z>
 		</velocity>
 		<color>
 			<r>200</r>
@@ -97,10 +107,12 @@
 		<position>
 			<x>778412010</x>
 			<y>0</y>
+			<z>0</z>
 		</position>
 		<velocity>
 			<x>0</x>
 			<y>13.0697</y>
+			<z>0</z>
 		</velocity>
 		<color>
 			<r>200</r>
@@ -115,10 +127,12 @@
 		<position>
 			<x>1426725400</x>
 			<y>0</y>
+			<z>0</z>
 		</position>
 		<velocity>
 			<x>0</x>
 			<y>9.6724</y>
+			<z>0</z>
 		</velocity>
 		<color>
 			<r>245</r>
@@ -133,10 +147,12 @@
 		<position>
 			<x>2870972200</x>
 			<y>0</y>
+			<z>0</z>
 		</position>
 		<velocity>
 			<x>0</x>
 			<y>6.8352</y>
+			<z>0</z>
 		</velocity>
 		<color>
 			<r>220</r>
@@ -151,10 +167,12 @@
 		<position>
 			<x>4498252900</x>
 			<y>0</y>
+			<z>0</z>
 		</position>
 		<velocity>
 			<x>0</x>
 			<y>5.4778</y>
+			<z>0</z>
 		</velocity>
 		<color>
 			<r>0</r>
