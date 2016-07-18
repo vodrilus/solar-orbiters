@@ -7,6 +7,16 @@ Solar system. Also, some asteroids.
 Requires Python 3 and pysdl2 installed. May require fiddling. (Windows: E.g.
 correct SDL2.dll in the System32 directory.)
 
+Keys:
+    w / s: pitch down/up
+    a / d: yaw left/right
+    q / r: roll left/right
+    x / z: zoom in/out
+    h / n: move forward/backward
+    i / k: move up/down
+    j / l: move left, right
+    , / .: increase/decrease simulation speed (gets choppy fast) 
+
 TODO: Move redundant code (or code of very general nature) somewhere else?
     TODO: Move generic Octree and Octnode to their own module.
     TODO: Move Vector3 to it's own module.
@@ -19,7 +29,9 @@ TODO: Improve graphical output.
 
 TODO: Improve Vector3 class
     TODO: Make immutable.
-    TODO: Override operators.    
+    TODO: Override operators.
+
+TODO: Clean up asteroid generation.
 """
 
 import sys
@@ -44,7 +56,7 @@ GRAY   = sdl2.ext.Color(150, 150, 150)
 
 GRAV_CONSTANT = 6.67408e-11 # For meters!
 
-SECONDS_PER_STEP = 3600 # The computation step in seconds
+SECONDS_PER_STEP = 3600 # The computation step in seconds. Rather high.
 STEPS_PER_FRAME = 0 # Computational steps per frame (supposedly 10 ms per
                     # frame). Can be adjusted with keyboard.
 THETA = 0.5 # Distance threshold ratio. Large values increase speed but
@@ -292,21 +304,24 @@ class BarnesHutOctNode2:
 
     def _set_bbox(self, data_iterable):
         """Set the bounding box and center for the node."""
-        self.min = next(data_iterable).add(0)
-        self.max = self.min.add(0)
+        first_v = next(data_iterable)
+        x_min, y_min, z_min = first_v.x, first_v.y, first_v.z
+        x_max, y_max, z_max = first_v.x, first_v.y, first_v.z
         for v in data_iterable:
-            if v.x < self.min.x:
-                   self.min.x = v.x
-            elif v.x > self.max.x:
-                   self.max.x = v.x
-            if v.y < self.min.y:
-               self.min.y = v.y
-            elif v.y > self.max.y:
-                self.max.y = v.y
-            if v.z < self.min.z:
-                self.min.z = v.z
-            elif v.z > self.max.z:
-                self.max.z = v.z
+            if v.x < x_min:
+                   x_min = v.x
+            elif v.x > x_max:
+                   x_max = v.x
+            if v.y < y_min:
+               y_min = v.y
+            elif v.y > y_max:
+                y_max = v.y
+            if v.z < z_min:
+                z_min = v.z
+            elif v.z > z_max:
+                z_max = v.z
+        self.min = Vector3(x_min, y_min, z_min)
+        self.max = Vector3(x_max, y_max, z_max)
         # Ugly below. Override operators in Vector3. Also a bit superfluous.
         self.center = self.min.add(self.max.sub(self.min).mul(0.5))
         self.width = self.max.sub(self.min).abs()
