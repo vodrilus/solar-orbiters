@@ -63,10 +63,12 @@ THETA = 0.5 # Distance threshold ratio. Large values increase speed but
             # sacrifice accuracy.
 MAX_QUADTREE_DEPTH = 30
 
+NUM_OF_STARS = 1001
+
 # Number of extra objects to twirl in the simulation.
-TROJANS = 10
-FREE_ASTEROIDS = 10
-JUPITER_ORBITERS = 10
+TROJANS = 0
+FREE_ASTEROIDS = 0
+JUPITER_ORBITERS = 0
 EXTRA_PLANETOIDS = 0
 
 MAKE_PLANETS = True # Debug option to disable normal planet creation, inc. Sun
@@ -84,7 +86,8 @@ class SpriteMovementSystem(sdl2.ext.Applicator):
         local_camera = camera # Minor hack to minimize global variable access.
         for position, sprite in componentsets:
             swidth, sheight = sprite.size
-            sprite.x, sprite.y = local_camera.world_to_screen_space(position)
+            sprite.x, sprite.y, sprite.depth = (
+                local_camera.world_to_screen_space(position))
             sprite.x -= swidth // 2
             sprite.y -= sheight // 2
         
@@ -391,10 +394,11 @@ class BarnesHutOctNode2:
                 
     def calculate_gravity(self, mass, mass_position, grav_position):
         """Calculate and return gravitational acceleration exerted by the given
-        at the given position."""
+        mass at the given position."""
         vector_to_mass = mass_position.sub(grav_position)
         if vector_to_mass.x == 0 and vector_to_mass.y == 0 and \
            vector_to_mass.z == 0:
+            # Avoid zero division errors or attempts to exert gravity on self.
             return Vector3()
 
         gravity_mag = GRAV_CONSTANT \
@@ -527,9 +531,18 @@ class TextureRenderSystem(sdl2.ext.TextureSpriteRenderSystem):
         self.renderer = renderer
 
     def render(self, components):
+        global camera, stars
         tmp = self.renderer.color
         self.renderer.color = BLACK
         self.renderer.clear()
+        self.renderer.color = WHITE
+        # stars is a global list of Star objects... for now.
+        star_coords = []
+        for s in stars:
+            coords = camera.star_to_screen_space(s.direction)
+            star_coords.extend(coords)
+        self.renderer.draw_point(star_coords)
+            
         self.renderer.color = tmp
         super(TextureRenderSystem, self).render(components)
 
@@ -607,7 +620,29 @@ class Camera3D:
         distance = abs(relat_pos)
         forward_length = relat_pos * self.forward
         if forward_length < self.minimum_distance:
+            return -1, -1, -1
+        
+        vertical_length = relat_pos * self.up
+        vertical_tangent = vertical_length / forward_length
+        lateral_length = relat_pos * (self.forward @ self.up)
+        lateral_tangent = lateral_length / forward_length
+
+        x = self.x_center + self.z * lateral_tangent
+        y = self.y_center - self.z * vertical_tangent
+        
+        return int(x), int(y), -int(distance)
+
+    def star_to_screen_space(self, position):
+        """Translate given position to screen space."""
+        relat_pos = quat.Quaternion(0,
+                                    position.x,
+                                    position.y,
+                                    position.z)
+
+        forward_length = relat_pos * self.forward
+        if forward_length <= 0.0:
             return -1, -1
+        
         vertical_length = relat_pos * self.up
         vertical_tangent = vertical_length / forward_length
         lateral_length = relat_pos * (self.forward @ self.up)
@@ -627,14 +662,20 @@ class Camera3D:
         self.position += delta_right
 
     def zoom(self, increment):
-        self.z = max(1, int(self.z * 2 ** increment))
+        new_z = max(1, int(self.z * 2 ** increment))
+        if new_z == self.z and increment > 0:
+            new_z += 1
+        self.z = new_z
 
 
 # Define data bags
-class Mass(object):
+class Mass:
     def __init__(self):
-        super(Mass, self).__init__()
         self.mass = 0
+
+class Radius:
+    def __init__(self):
+        self.radius = 0
 
 class Position(Vector3):
     def __init__(self, x=0, y=0, z=0):
@@ -647,11 +688,15 @@ class Velocity(Vector3):
 class Acceleration(Vector3):
     def __init__(self, x=0, y=0, z=0):
         super(Acceleration, self).__init__(x, y, z)
+
+class Direction(Vector3):
+    def __init__(self, x=1, y=0, z=0):
+        super(Direction, self).__init__(x, y, z)
         
 
 class AstronomicalObject(sdl2.ext.Entity):
     """Model of an astronomical object (eg. star, planet, moon, asteroid)."""
-    def __init__(self, world, sprite, mass=0, posx=0, posy=0, posz=0,
+    def __init__(self, world, sprite, mass=0, radius=0, posx=0, posy=0, posz=0,
                  vx=0, vy=0, vz=0):
         self.position = Position(posx, posy, posz)
 
@@ -661,20 +706,47 @@ class AstronomicalObject(sdl2.ext.Entity):
         self.mass = Mass()
         self.mass.mass = mass
 
+        self.radius = Radius()
+        self.radius.radius = radius
+
         self.sprite = sprite
         self.sprite.position = camera.world_to_screen_space(self.position)
+
+
+class Star(sdl2.ext.Entity):
+    """A cosmetic little dot far, far away."""
+    def __init__(self, world, x=1, y=0, z=0):
+        self.direction = Direction(x, y, z)
             
 
+def generate_random_directions(number):
+    directions = []
+    for i in range(number):
+        directions.append(spherical_distribution())
+    return directions
+
+def spherical_distribution():
+    """Generate elements of pseudo-random unit vector with uniform spherical
+    distribution.
+    See http://math.stackexchange.com/q/44691 (version: 2011-06-11)"""
+    theta = random.uniform(0, math.pi*2)
+    z = random.uniform(-1.0, 1.0)
+    x = math.cos(theta) * math.sqrt(1.0 - z * z)
+    y = math.sin(theta) * math.sqrt(1.0 - z * z)
+
+    return x, y, z
+
 def run():
-    global camera, STEPS_PER_FRAME, world
+    global camera, STEPS_PER_FRAME, world, stars
 
     astronomical_objects = []
+    stars = []
     
     sdl2.ext.init()
     window = sdl2.ext.Window("Solar Orbiters", size=WINDOW_SIZE)
     window.show()
 
-    if "-hardware" in sys.argv:
+    if True:
         print("Using hardware acceleration")
         renderer = sdl2.ext.Renderer(window)
         factory = sdl2.ext.SpriteFactory(sdl2.ext.TEXTURE, renderer=renderer)
@@ -697,10 +769,14 @@ def run():
     world.add_system(movementsystem)
     world.add_system(spritemovementsystem)
 
+    # Instantiate stars
+    for x, y, z in generate_random_directions(NUM_OF_STARS):
+        stars.append(Star(world, x, y, z))
+
     # Parse solar system data from xml
     tree = ET.parse(ASTRO_OBJECTS_XML_PATH)
     root = tree.getroot()
-
+    
     # Instantiate planets
     for astro_object in root.findall('object'):
         if not MAKE_PLANETS:
@@ -712,15 +788,17 @@ def run():
         sprite = factory.from_color(color, size=(10, 10))
         mass = ( float(astro_object.find('mass').text) *
                  10 ** int(astro_object.find('mass')[0].text))
+        radius = 10000 # Temporary test number.
         x = int(astro_object.find('position').find('x').text) * 1000
         y = int(astro_object.find('position').find('y').text) * 1000
         z = int(astro_object.find('position').find('z').text) * 1000
         vx = float(astro_object.find('velocity').find('x').text) * 1000
         vy = float(astro_object.find('velocity').find('y').text) * 1000
         vz = float(astro_object.find('velocity').find('z').text) * 1000
-        astronomical_objects.append(AstronomicalObject(world, sprite, mass,
+        astronomical_objects.append(AstronomicalObject(world, sprite,
+                                                       mass, radius,
                                                        x, y, z,  vx, vy, vz))
-
+    
     # TODO: Refactor asteroid creation to function.
     # Instantiate some Trojans... or were they Greeks?
     # Pretty messy. Should clean up a bit.
