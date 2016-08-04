@@ -33,6 +33,9 @@ TODO: Improve Vector3 class
 TODO: Clean up asteroid generation.
 
 TODO: Migrate from xml to json.
+
+TODO: Get real-world data for planet positions and velocities.
+    From NASA Horizons?
 """
 
 import sys
