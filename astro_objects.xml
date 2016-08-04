@@ -4,6 +4,7 @@
         <mass>1.9891
 			<exponent>30</exponent>
 		</mass>
+		<diameter>109</diameter>
 		<position>
 			<x>0</x>
 			<y>0</y>
@@ -24,6 +25,7 @@
         <mass>3.302
 			<exponent>23</exponent>
 		</mass>
+		<diameter>0.382</diameter>
 		<position>
 			<x>57909175</x>
 			<y>0</y>
@@ -44,6 +46,7 @@
         <mass>4.8690
 			<exponent>24</exponent>
 		</mass>
+		<diameter>0.949</diameter>
 		<position>
 			<x>108208930</x>
 			<y>0</y>
@@ -64,6 +67,7 @@
         <mass>5.9742
 			<exponent>24</exponent>
 		</mass>
+		<diameter>1.00</diameter>
 		<position>
 			<x>149597890</x>
 			<y>0</y>
@@ -84,6 +88,7 @@
         <mass>6.4191
 			<exponent>23</exponent>
 		</mass>
+		<diameter>0.532</diameter>
 		<position>
 			<x>227936640</x>
 			<y>0</y>
@@ -104,6 +109,7 @@
         <mass>1.8987
 			<exponent>27</exponent>
 		</mass>
+		<diameter>11.209</diameter>
 		<position>
 			<x>778412010</x>
 			<y>0</y>
@@ -124,6 +130,7 @@
         <mass>5.6851
 			<exponent>26</exponent>
 		</mass>
+		<diameter>9.449</diameter>
 		<position>
 			<x>1426725400</x>
 			<y>0</y>
@@ -144,6 +151,7 @@
         <mass>8.6849
 			<exponent>25</exponent>
 		</mass>
+		<diameter>4.007</diameter>
 		<position>
 			<x>2870972200</x>
 			<y>0</y>
@@ -164,6 +172,7 @@
         <mass>1.0244
 			<exponent>26</exponent>
 		</mass>
+		<diameter>3.883</diameter>
 		<position>
 			<x>4498252900</x>
 			<y>0</y>
