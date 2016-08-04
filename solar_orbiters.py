@@ -554,8 +554,8 @@ class TextureRenderSystem(sdl2.ext.TextureSpriteRenderSystem):
             if sp.depth >= 0:
                 r.x, r.y, r.w, r.h = -1, -1, 1, 1
             else:
-                r.w = int(max(1, (sp.size[0] / (-sp.depth / 15e10))))
-                r.h = int(max(1, sp.size[1] / (-sp.depth / 15e10)))
+                r.w = int(max(1, (sp.size[0] / (-sp.depth / 15e9))))
+                r.h = int(max(1, sp.size[1] / (-sp.depth / 15e9)))
                 r.x = sp.x - r.w // 2
                 r.y = sp.y - r.h // 2
             if rcopy(renderer, sp.texture, None, r) == -1:
@@ -799,10 +799,12 @@ def run():
         color = sdl2.ext.Color(int(color_elem[0].text),
                                int(color_elem[1].text),
                                int(color_elem[2].text))
-        sprite = factory.from_color(color, size=(10, 10))
+        diameter = max(1, int(float(astro_object.find('diameter').text) * 10))
+        sprite = factory.from_color(color, size=(diameter, diameter))
         mass = ( float(astro_object.find('mass').text) *
                  10 ** int(astro_object.find('mass')[0].text))
         radius = 10000 # Temporary test number.
+        
         x = int(astro_object.find('position').find('x').text) * 1000
         y = int(astro_object.find('position').find('y').text) * 1000
         z = int(astro_object.find('position').find('z').text) * 1000
