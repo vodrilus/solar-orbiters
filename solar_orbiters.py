@@ -513,7 +513,6 @@ class Vector3:
             return True
         else:
             return False
-        
 
 
 class SoftwareRenderSystem(sdl2.ext.SoftwareSpriteRenderSystem):
@@ -565,27 +564,6 @@ class TextureRenderSystem(sdl2.ext.TextureSpriteRenderSystem):
                 raise SDLError()
         sdl2.SDL_RenderPresent(self.sdlrenderer)
 
-
-class Camera():
-    """A simple class to transform world co-ordinates to screen co-ordinates.
-    Allows movement of display."""
-    def __init__(self):
-        self.x = 0
-        self.y = 0
-        self.scale = WINDOW_SCALE
-
-    def move(self, dx, dy):
-        self.x += dx * self.scale
-        self.y += dy * self.scale
-
-    def zoom(self, factor):
-        self.scale = int(self.scale / factor)
-
-    def world_coord_to_screen_coord(self, x_world, y_world):
-        w_width, w_height = WINDOW_SIZE
-        x_screen = int((x_world - self.x) / self.scale + w_width / 2 )
-        y_screen = int((y_world - self.y) / self.scale + w_height / 2 )
-        return x_screen, y_screen
 
 class Camera3D:
     """An experimental camera class to display 3d views of the solar system.
@@ -742,6 +720,7 @@ def generate_random_directions(number):
         directions.append(spherical_distribution())
     return directions
 
+
 def spherical_distribution():
     """Generate elements of pseudo-random unit vector with uniform spherical
     distribution.
@@ -752,6 +731,7 @@ def spherical_distribution():
     y = math.sin(theta) * math.sqrt(1.0 - z * z)
 
     return x, y, z
+
 
 def run():
     global camera, STEPS_PER_FRAME, world, stars
