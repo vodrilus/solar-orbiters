@@ -18,16 +18,19 @@ import math
 from collections import namedtuple
 
 class Quaternion(namedtuple('Quaternion', 's x y z')):
-    """A quaternion."""
+    """An immutable quaternion class derived from namedtuple.
+
+    Constructor arguments should be integers or floats. This is not enforced,
+    so using other types may lead to weird behaviour."""
 
     def __str__(self):
-        return 'Quaternion: {} + {}i + {}j + {}k'.format(self.s, self.x,
+        return 'Quaternion: [{}, {}i, {}j, {}k]'.format(self.s, self.x,
                                                          self.y, self.z)
 
     def __add__(self, other):
-        """Return sum of this and another quaternion."""
+        """Return the sum of this and another quaternion."""
         if not isinstance(other, Quaternion):
-            raise TypeError("other not Quaternion")
+            raise TypeError("Other is not a Quaternion.")
             
         s = self.s + other.s
         x = self.x + other.x
@@ -37,9 +40,9 @@ class Quaternion(namedtuple('Quaternion', 's x y z')):
         return Quaternion(s,x,y,z)
 
     def __sub__(self, other):
-        """Return difference of this and another quaternion."""
+        """Return the difference of this and another quaternion."""
         if not isinstance(other, Quaternion):
-            raise TypeError("other not Quaternion")
+            raise TypeError("Other is not a Quaternion.")
             
         s = self.s - other.s
         x = self.x - other.x
@@ -49,7 +52,7 @@ class Quaternion(namedtuple('Quaternion', 's x y z')):
         return Quaternion(s,x,y,z)
 
     def __matmul__(self, other):
-        """Return (matrix) product of two quaternions."""
+        """Return the (matrix) product of this and another quaternion."""
         if isinstance(other, Quaternion):
             s_1, x_1, y_1, z_1 = self.s, self.x, self.y, self.z
             s_2, x_2, y_2, z_2 = other.s, other.x, other.y, other.z
@@ -65,8 +68,8 @@ class Quaternion(namedtuple('Quaternion', 's x y z')):
             raise TypeError("Type of other not acceptable.")
 
     def __mul__(self, other):
-        """Return elementwise (dot) product of two quaternions or a quaternion
-        and a scalar (integer or float)."""
+        """Return elementwise (dot) product of this and either another
+        quaternion or a scalar (integer or float)."""
         if isinstance(other, Quaternion):
             return (self.s * other.s +
                     self.x * other.x +
@@ -152,36 +155,48 @@ class Quaternion(namedtuple('Quaternion', 's x y z')):
         return self.__abs__()
 
     def __lt__(self, other):
+        """Return true if the magnitude of the quaternion is less than the
+        magnitude of the compared quaternion or scalar."""
         if not isinstance(other, (int, float, Vector3)):
             raise TypeError("Type of other not acceptable.")
             
         return self.__mul__(self) < other.__mul__(other)
 
     def __le__(self, other):
+        """Return true if the magnitude of the quaternion is less than or equal
+        to the magnitude of the compared quaternion or scalar."""
         if not isinstance(other, (int, float, Vector3)):
             raise TypeError("Type of other not acceptable.")
             
         return self.__mul__(self) <= other.__mul__(other)
 
     def __eq__(self, other):
+        """Return true if the magnitude of the quaternion is equal to the
+        magnitude of the compared quaternion or scalar."""
         if not isinstance(other, (int, float, Vector3)):
             raise TypeError("Type of other not acceptable.")
             
         return self.__mul__(self) == other.__mul__(other)
 
     def __ne__(self, other):
+        """Return true if the magnitude of the quaternion is not equal to the
+        magnitude of the compared quaternion or scalar."""
         if not isinstance(other, (int, float, Vector3)):
             raise TypeError("Type of other not acceptable.")
             
         return self.__mul__(self) != other.__mul__(other)
 
     def __ge__(self, other):
+        """Return true if the magnitude of the quaternion is greater than or
+        equal to the magnitude of the compared quaternion or scalar."""
         if not isinstance(other, (int, float, Vector3)):
             raise TypeError("Type of other not acceptable.")
             
         return self.__mul__(self) >= other.__mul__(other)
 
     def __gt__(self, other):
+        """Return true if the magnitude of the quaternion is greater than the
+        magnitude of the compared quaternion or scalar."""
         if not isinstance(other, (int, float, Vector3)):
             raise TypeError("Type of other not acceptable.")
             
