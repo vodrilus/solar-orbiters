@@ -32,6 +32,8 @@ TODO: Improve Vector3 class
     TODO: Override operators.
 
 TODO: Clean up asteroid generation.
+
+TODO: Migrate from xml to json.
 """
 
 import sys
@@ -83,14 +85,11 @@ class SpriteMovementSystem(sdl2.ext.Applicator):
 
     def process(self, world, componentsets):
         """Move sprites to represent planet movement"""
-        local_camera = camera # Minor hack to minimize global variable access.
-        for position, sprite in componentsets:
-            swidth, sheight = sprite.size
-            sprite.x, sprite.y, sprite.depth = (
-                local_camera.world_to_screen_space(position))
-            sprite.x -= swidth // 2
-            sprite.y -= sheight // 2
+        global camera
         
+        for position, sprite in componentsets:
+            sprite.x, sprite.y, sprite.depth = (
+                camera.world_to_screen_space(position))
 
 
 class MovementSystem(sdl2.ext.Applicator):
@@ -515,7 +514,7 @@ class Vector3:
 
 
 class SoftwareRenderSystem(sdl2.ext.SoftwareSpriteRenderSystem):
-    """The default renderer."""
+    """Software renderer. Not default."""
     def __init__(self, window):
         super(SoftwareRenderSystem, self).__init__(window)
 
@@ -525,26 +524,43 @@ class SoftwareRenderSystem(sdl2.ext.SoftwareSpriteRenderSystem):
 
 
 class TextureRenderSystem(sdl2.ext.TextureSpriteRenderSystem):
-    """Hardware-accelerated renderer. Not default."""
+    """Hardware-accelerated renderer. Default."""
     def __init__(self, renderer):
         super(TextureRenderSystem, self).__init__(renderer)
         self.renderer = renderer
 
     def render(self, components):
         global camera, stars
+
+        # Draw stars
         tmp = self.renderer.color
         self.renderer.color = BLACK
         self.renderer.clear()
         self.renderer.color = WHITE
-        # stars is a global list of Star objects... for now.
-        star_coords = []
+        
+        star_coords = [] # stars is a global list of Star objects... for now.
         for s in stars:
             coords = camera.star_to_screen_space(s.direction)
             star_coords.extend(coords)
         self.renderer.draw_point(star_coords)
             
         self.renderer.color = tmp
-        super(TextureRenderSystem, self).render(components)
+        # Draw sprites
+        r = sdl2.SDL_Rect(0, 0, 0, 0)
+
+        rcopy = sdl2.SDL_RenderCopy
+        renderer = self.sdlrenderer
+        for sp in components:
+            if sp.depth >= 0:
+                r.x, r.y, r.w, r.h = -1, -1, 1, 1
+            else:
+                r.w = int(max(1, (sp.size[0] / (-sp.depth / 15e10))))
+                r.h = int(max(1, sp.size[1] / (-sp.depth / 15e10)))
+                r.x = sp.x - r.w // 2
+                r.y = sp.y - r.h // 2
+            if rcopy(renderer, sp.texture, None, r) == -1:
+                raise SDLError()
+        sdl2.SDL_RenderPresent(self.sdlrenderer)
 
 
 class Camera():
@@ -572,9 +588,7 @@ class Camera3D:
     """An experimental camera class to display 3d views of the solar system.
 
     Error creep is an issue: Directional vectors might not always remain
-    perpendicular to each other, screwing up the display.
-
-    Also: DEBUG."""
+    perpendicular to each other, screwing up the display."""
     def __init__(self, position=None, forward=None, up=None):
         if position is None:
             self.position = quat.Quaternion(0,0,0,3e11) # High above the plane
@@ -620,7 +634,7 @@ class Camera3D:
         distance = abs(relat_pos)
         forward_length = relat_pos * self.forward
         if forward_length < self.minimum_distance:
-            return -1, -1, -1
+            return -1, -1, 1
         
         vertical_length = relat_pos * self.up
         vertical_tangent = vertical_length / forward_length
