@@ -25,6 +25,7 @@ TODO: Improve graphical output.
     TODO: Draw current velocity as a vector
     TODO: Draw gravitational acceleration as a vector
     TODO: Draw orbits (raw estimate from velocity and acceleration)
+        Is rather involved. Requires editing gravity code.
 
 TODO: Improve Vector3 class
     TODO: Make immutable.
@@ -70,9 +71,9 @@ MAX_QUADTREE_DEPTH = 30
 NUM_OF_STARS = 1001
 
 # Number of extra objects to twirl in the simulation.
-TROJANS = 0
-FREE_ASTEROIDS = 0
-JUPITER_ORBITERS = 0
+TROJANS = 30
+FREE_ASTEROIDS = 30
+JUPITER_ORBITERS = 30
 EXTRA_PLANETOIDS = 0
 
 MAKE_PLANETS = True # Debug option to disable normal planet creation, inc. Sun
@@ -556,8 +557,8 @@ class TextureRenderSystem(sdl2.ext.TextureSpriteRenderSystem):
             if sp.depth >= 0:
                 r.x, r.y, r.w, r.h = -1, -1, 1, 1
             else:
-                r.w = int(max(1, (sp.size[0] / (-sp.depth / 15e9))))
-                r.h = int(max(1, sp.size[1] / (-sp.depth / 15e9)))
+                r.w = int(max(2, (sp.size[0] / (-sp.depth / 15e9))))
+                r.h = int(max(2, sp.size[1] / (-sp.depth / 15e9)))
                 r.x = sp.x - r.w // 2
                 r.y = sp.y - r.h // 2
             if rcopy(renderer, sp.texture, None, r) == -1:
@@ -781,9 +782,9 @@ def run():
     spritemovementsystem = SpriteMovementSystem()
     camera = Camera3D()
 
-    world.add_system(spriterenderer)
     world.add_system(movementsystem)
     world.add_system(spritemovementsystem)
+    world.add_system(spriterenderer)
 
     # Instantiate stars
     for x, y, z in generate_random_directions(NUM_OF_STARS):
@@ -843,7 +844,9 @@ def run():
         vx = math.cos(vel_angle) * velocity + vx0
         vy = math.sin(vel_angle) * velocity + vy0
         vz = 0
+        radius = 10000 # Temporary test number.
         astronomical_objects.append(AstronomicalObject(world, sprite, mass,
+                                                       radius,
                                                        x, y, z, vx, vy, vz))
 
     # Instantiate some Jupiter Orbiters
@@ -867,7 +870,9 @@ def run():
         vx = math.cos(vel_angle) * velocity + vx0
         vy = math.sin(vel_angle) * velocity + vy0
         vz = 0
+        radius = 10000 # Temporary test number.
         astronomical_objects.append(AstronomicalObject(world, sprite, mass,
+                                                       radius,
                                                        x, y, z, vx, vy, vz))
 
     # Instantiate some random asteroids.
@@ -889,7 +894,9 @@ def run():
         vx = math.cos(vel_angle) * velocity
         vy = math.sin(vel_angle) * velocity
         vz = 0
+        radius = 10000 # Temporary test number.
         astronomical_objects.append(AstronomicalObject(world, sprite, mass,
+                                                       radius,
                                                        x, y, z, vx, vy, vz))
 
     # Instantiate some random planetoids.
@@ -911,7 +918,9 @@ def run():
         vx = math.cos(vel_angle) * velocity
         vy = math.sin(vel_angle) * velocity
         vz = 0
+        radius = 10000 # Temporary test number.
         astronomical_objects.append(AstronomicalObject(world, sprite, mass,
+                                                       radius,
                                                        x, y, z, vx, vy, vz))
         
     
@@ -939,17 +948,17 @@ def run():
                 elif event.key.keysym.sym == sdl2.SDLK_z:
                     camera.zoom(-0.1)
                 elif event.key.keysym.sym == sdl2.SDLK_w:
-                    camera.pitch(0.1)
+                    camera.pitch(0.03)
                 elif event.key.keysym.sym == sdl2.SDLK_s:
-                    camera.pitch(-0.1)
+                    camera.pitch(-0.03)
                 elif event.key.keysym.sym == sdl2.SDLK_a:
-                    camera.yaw(-0.1)
+                    camera.yaw(-0.03)
                 elif event.key.keysym.sym == sdl2.SDLK_d:
-                    camera.yaw(0.1)
+                    camera.yaw(0.03)
                 elif event.key.keysym.sym == sdl2.SDLK_q:
-                    camera.roll(-0.1)
+                    camera.roll(-0.03)
                 elif event.key.keysym.sym == sdl2.SDLK_e:
-                    camera.roll(0.1)
+                    camera.roll(0.03)
                 elif event.key.keysym.sym == sdl2.SDLK_PERIOD:
                     STEPS_PER_FRAME += 1
                 elif event.key.keysym.sym == sdl2.SDLK_COMMA:
