@@ -22,7 +22,6 @@ TODO: Move redundant code (or code of very general nature) somewhere else?
     TODO: Move Vector3 to it's own module.
 
 TODO: Improve graphical output.
-    TODO: Improve visual ques (drawing depth, size, stars)
     TODO: Draw current velocity as a vector
     TODO: Draw gravitational acceleration as a vector
     TODO: Draw orbits (raw estimate from velocity and acceleration)
