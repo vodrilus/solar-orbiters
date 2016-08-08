@@ -3,6 +3,8 @@ A numerical, Newtonian and very inaccurate simulation of the planets of the Sola
 
 Requires Python 3 and pysdl2 installed. May require fiddling. (Windows: E.g. correct SDL2.dll in the System32 directory.)
 
+See https://www.youtube.com/watch?v=SoEiXlCQFQQ&list=PLZ8QajohPoeKFdicxboFiW2OsejfbY6Hy for some raw video capture.
+
 Keys:
   W / S: pitch down/up
   A / D: yaw left/right
