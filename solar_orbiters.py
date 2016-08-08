@@ -37,6 +37,8 @@ TODO: Migrate from xml to json.
 
 TODO: Get real-world data for planet positions and velocities.
     From NASA Horizons?
+    
+TODO: Fix net gain of energy in close approaches.
 """
 
 import sys
