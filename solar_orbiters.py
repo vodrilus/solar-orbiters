@@ -76,10 +76,10 @@ MAX_QUADTREE_DEPTH = 30
 NUM_OF_STARS = 1001
 
 # Number of extra objects to twirl in the simulation.
-TROJANS = 0
-FREE_ASTEROIDS = 0
-JUPITER_ORBITERS = 0
-EXTRA_PLANETOIDS = 2
+TROJANS = 20
+FREE_ASTEROIDS = 20
+JUPITER_ORBITERS = 10
+EXTRA_PLANETOIDS = 0
 
 MAKE_PLANETS = True # Debug option to disable normal planet creation, inc. Sun
 
@@ -866,7 +866,7 @@ def run():
     v_deviation = 1e3
     radius = 10000 # Temporary test number.
     for i in range(JUPITER_ORBITERS):
-        sprite = factory.from_color(GRAY, size=(4, 4))
+        sprite = factory.from_color(GRAY, size=(2, 2))
 
         x, y, z, vx, vy, vz = generate_asteroid_data(x0, y0, z0, max_radius,
                                                      min_radius, vx0, vy0, vz0,
@@ -888,7 +888,7 @@ def run():
     v_deviation = 1e5
     radius = 10000 # Temporary test number.
     for i in range(FREE_ASTEROIDS):
-        sprite = factory.from_color(GRAY, size=(4, 4))
+        sprite = factory.from_color(GRAY, size=(2, 2))
         x, y, z, vx, vy, vz = generate_asteroid_data(x0, y0, z0, max_radius,
                                                      min_radius, vx0, vy0, vz0,
                                                      v_deviation)
@@ -920,44 +920,118 @@ def run():
         
     
     running = True
+    # An input dictionary for continuous input.
+    input_dict = {'translate-left': False,
+                  'translate-right': False,
+                  'translate-up': False,
+                  'translate-down': False,
+                  'translate-forward': False,
+                  'translate-backward': False,
+                  'zoom-in': False,
+                  'zoom-out': False,
+                  'pitch-down': False,
+                  'pitch-up': False,
+                  'yaw-left': False,
+                  'yaw-right': False,
+                  'roll-left': False,
+                  'roll-right': False}
+    
     while running:
         for event in sdl2.ext.get_events():
             if event.type == sdl2.SDL_QUIT:
                 running = False
                 break
-            if event.type == sdl2.SDL_KEYDOWN:
+            elif event.type == sdl2.SDL_KEYDOWN:
                 if event.key.keysym.sym == sdl2.SDLK_h:
-                    camera.translate(1,0,0)
+                    input_dict['translate-forward'] = True
                 elif event.key.keysym.sym == sdl2.SDLK_n:
-                    camera.translate(-1,0,0)
+                    input_dict['translate-backward'] = True
                 elif event.key.keysym.sym == sdl2.SDLK_i:
-                    camera.translate(0,1,0)
+                    input_dict['translate-up'] = True
                 elif event.key.keysym.sym == sdl2.SDLK_k:
-                    camera.translate(0,-1,0)
+                    input_dict['translate-down'] = True
                 elif event.key.keysym.sym == sdl2.SDLK_j:
-                    camera.translate(0,0,-1)
+                    input_dict['translate-left'] = True
                 elif event.key.keysym.sym == sdl2.SDLK_l:
-                    camera.translate(0,0,1)
+                    input_dict['translate-right'] = True
                 elif event.key.keysym.sym == sdl2.SDLK_x:
-                    camera.zoom(0.1)
+                    input_dict['zoom-in'] = True
                 elif event.key.keysym.sym == sdl2.SDLK_z:
-                    camera.zoom(-0.1)
+                    input_dict['zoom-out'] = True
                 elif event.key.keysym.sym == sdl2.SDLK_w:
-                    camera.pitch(0.03)
+                    input_dict['pitch-down'] = True
                 elif event.key.keysym.sym == sdl2.SDLK_s:
-                    camera.pitch(-0.03)
+                    input_dict['pitch-up'] = True
                 elif event.key.keysym.sym == sdl2.SDLK_a:
-                    camera.yaw(-0.03)
+                    input_dict['yaw-left'] = True
                 elif event.key.keysym.sym == sdl2.SDLK_d:
-                    camera.yaw(0.03)
+                    input_dict['yaw-right'] = True
                 elif event.key.keysym.sym == sdl2.SDLK_q:
-                    camera.roll(-0.03)
+                    input_dict['roll-left'] = True
                 elif event.key.keysym.sym == sdl2.SDLK_e:
-                    camera.roll(0.03)
+                    input_dict['roll-right'] = True
                 elif event.key.keysym.sym == sdl2.SDLK_PERIOD:
                     STEPS_PER_FRAME += 1
                 elif event.key.keysym.sym == sdl2.SDLK_COMMA:
                     STEPS_PER_FRAME = max(0, STEPS_PER_FRAME-1)
+            elif event.type == sdl2.SDL_KEYUP:
+                if event.key.keysym.sym == sdl2.SDLK_h:
+                    input_dict['translate-forward'] = False
+                elif event.key.keysym.sym == sdl2.SDLK_n:
+                    input_dict['translate-backward'] = False
+                elif event.key.keysym.sym == sdl2.SDLK_i:
+                    input_dict['translate-up'] = False
+                elif event.key.keysym.sym == sdl2.SDLK_k:
+                    input_dict['translate-down'] = False
+                elif event.key.keysym.sym == sdl2.SDLK_j:
+                    input_dict['translate-left'] = False
+                elif event.key.keysym.sym == sdl2.SDLK_l:
+                    input_dict['translate-right'] = False
+                elif event.key.keysym.sym == sdl2.SDLK_x:
+                    input_dict['zoom-in'] = False
+                elif event.key.keysym.sym == sdl2.SDLK_z:
+                    input_dict['zoom-out'] = False
+                elif event.key.keysym.sym == sdl2.SDLK_w:
+                    input_dict['pitch-down'] = False
+                elif event.key.keysym.sym == sdl2.SDLK_s:
+                    input_dict['pitch-up'] = False
+                elif event.key.keysym.sym == sdl2.SDLK_a:
+                    input_dict['yaw-left'] = False
+                elif event.key.keysym.sym == sdl2.SDLK_d:
+                    input_dict['yaw-right'] = False
+                elif event.key.keysym.sym == sdl2.SDLK_q:
+                    input_dict['roll-left'] = False
+                elif event.key.keysym.sym == sdl2.SDLK_e:
+                    input_dict['roll-right'] = False
+
+        if input_dict['translate-forward']:
+            camera.translate(0.5,0,0)
+        if input_dict['translate-backward']:
+            camera.translate(-0.5,0,0)
+        if input_dict['translate-up']:
+            camera.translate(0,0.5,0)
+        if input_dict['translate-down']:
+            camera.translate(0,-0.5,0)
+        if input_dict['translate-left']:
+            camera.translate(0,0,-0.5)
+        if input_dict['translate-right']:
+            camera.translate(0,0,0.5)
+        if input_dict['zoom-in']:
+            camera.zoom(0.1)
+        if input_dict['zoom-out']:
+            camera.zoom(-0.1)
+        if input_dict['pitch-down']:
+            camera.pitch(0.03)
+        if input_dict['pitch-up']:
+            camera.pitch(-0.03)
+        if input_dict['yaw-left']:
+            camera.yaw(-0.03)
+        if input_dict['yaw-right']:
+            camera.yaw(0.03)
+        if input_dict['roll-left']:
+            camera.roll(-0.03)
+        if input_dict['roll-right']:
+            camera.roll(0.03)
                     
         sdl2.SDL_Delay(10)
 
