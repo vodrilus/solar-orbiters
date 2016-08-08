@@ -39,6 +39,9 @@ TODO: Get real-world data for planet positions and velocities.
     From NASA Horizons?
     
 TODO: Fix net gain of energy in close approaches.
+
+TODO: Improve keyboard input
+    KeyUp, KeyDown with continuous and smooth effects.
 """
 
 import sys
