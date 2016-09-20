@@ -63,6 +63,7 @@ WHITE  = sdl2.ext.Color(255, 255, 255)
 BLUE   = sdl2.ext.Color(0, 0, 255)
 YELLOW = sdl2.ext.Color(255, 255, 0)
 GRAY   = sdl2.ext.Color(150, 150, 150)
+BLUISH_GRAY = sdl2.ext.Color(150, 150, 200)
 
 GRAV_CONSTANT = 6.67408e-11 # For meters!
 
@@ -542,7 +543,7 @@ class TextureRenderSystem(sdl2.ext.TextureSpriteRenderSystem):
         tmp = self.renderer.color
         self.renderer.color = BLACK
         self.renderer.clear()
-        self.renderer.color = WHITE
+        self.renderer.color = BLUISH_GRAY
         
         star_coords = [] # stars is a global list of Star objects... for now.
         for s in stars:
