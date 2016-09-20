@@ -942,9 +942,20 @@ def run():
                 running = False
                 break
             elif event.type == sdl2.SDL_KEYDOWN:
-                input_set.add(event.key.keysym.sym)
+                # The repeat delay is useful for speeding up or slowing down
+                # the simulation, but not for camera rotation.
+                if event.key.keysym.sym == sdl2.SDLK_PERIOD:
+                    STEPS_PER_FRAME += 1
+                elif event.key.keysym.sym == sdl2.SDLK_COMMA:
+                    STEPS_PER_FRAME = max(0, STEPS_PER_FRAME-1)
+                else:
+                    input_set.add(event.key.keysym.sym)
             elif event.type == sdl2.SDL_KEYUP:
-                input_set.remove(event.key.keysym.sym)
+                try:
+                    input_set.remove(event.key.keysym.sym)
+                except:
+                    # Ignore orphan KEYUP events.
+                    pass
 
         if keymap_dict['translate-forward'] in input_set:
             camera.translate(0.5,0,0)
